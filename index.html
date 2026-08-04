@@ -332,13 +332,15 @@ const S = {
   users:[
     {id:'u1',nome:'Letícia',   ini:'LE',papel:'coordenacao',cargo:'Coordenadora',      cor:'#7C6FF0',capacidade:4},
     {id:'u2',nome:'Francine',  ini:'FR',papel:'analista',   cargo:'Assistente de B.I',  cor:'#2DB8A3',capacidade:7},
-    {id:'u3',nome:'Gustavo',   ini:'GU',papel:'analista',   cargo:'Analista de B.I',    cor:'#3B9EFF',capacidade:8},
+    {id:'u3',nome:'Gustavo',   ini:'GU',papel:'admin',      cargo:'Analista de B.I',    cor:'#3B9EFF',capacidade:8},
     {id:'u4',nome:'Evellyn',   ini:'EV',papel:'analista',   cargo:'Auxiliar de ADM',    cor:'#F5934A',capacidade:8},
     {id:'u5',nome:'Lucas Nadú',ini:'LN',papel:'analista',   cargo:'Assistente de ADM',  cor:'#E8637E',capacidade:7}
   ],
   tasks:[], rotinas:[]
 };
 const user = id => S.users.find(u=>u.id===id) || {id:'',nome:'Sem responsável',ini:'—',capacidade:0,papel:'analista',cor:'#4E606C'};
+// quem enxerga TUDO (quadro completo + aba Coordenação): coordenação ou admin
+const ehGestor = (id=S.me) => { const u=user(id); return u.papel==='coordenacao' || u.papel==='admin'; };
 // avatar com a cor da própria pessoa
 const avatar = (id, extra='') => {
   const u = user(id), c = u.cor || '#4E606C';
@@ -556,7 +558,8 @@ function linhaTask(t, extra){
    5. VIEWS
    ========================================================================= */
 function vBoard(){
-  const base = filtra(S.tasks).filter(t=>t.status!=='expirado');
+  let base = filtra(S.tasks).filter(t=>t.status!=='expirado');
+  if(!ehGestor()) base = base.filter(t=>t.resp===S.me);   // cada um vê só o que é seu
   const grupo = S.grupo || 'status';
 
   // agrupamento por status = kanban clássico com drag
@@ -647,6 +650,7 @@ function vMinhas(){
 
 function vLista(){
   let ts = filtra(S.tasks);
+  if(!ehGestor()) ts = ts.filter(t=>t.resp===S.me);
   if(!S.verConcluidas) ts = ts.filter(ativa);
   const o = S.ordem, dir = o.asc?1:-1;
   ts.sort((a,b)=>{
@@ -1252,18 +1256,20 @@ const TITULOS = {board:'Quadro', minhas:'Minhas tarefas', lista:'Lista completa'
 const VIEWS   = {board:vBoard, minhas:vMinhas, lista:vLista, rotinas:vRotinas, painel:vPainel};
 
 function render(){
+  if(S.view==='painel' && !ehGestor()) S.view='board';   // trava de segurança
   $('#title').textContent = TITULOS[S.view] || 'Quadro';
   const semFiltro = S.view==='painel' || S.view==='rotinas';
   $('#filters').classList.toggle('hide', semFiltro);
-  const fg = $('#fGroup'); if(fg) fg.classList.toggle('hide', S.view!=='board');
   (VIEWS[S.view] || vBoard)();
   const abertas = S.tasks.filter(ativa);
-  $('#nb').textContent = abertas.length;
+  $('#nb').textContent = ehGestor() ? abertas.length : abertas.filter(t=>t.resp===S.me).length;
   $('#nm').textContent = abertas.filter(t=>t.resp===S.me).length;
   $('#nr').textContent = S.rotinas.filter(r=>r.ativa).length;
   const at = abertas.filter(isAtrasada).length;
   $('#na').textContent = at || '';
   $('#na').classList.toggle('alert', !!at);
+  aplicarPermissoes();
+  const fg = $('#fGroup'); if(fg && !fg.classList.contains('hide')) fg.classList.toggle('hide', S.view!=='board');
   salvar();
   const info = $('#salvoInfo');
   if(info) info.innerHTML = temStorage
@@ -1275,7 +1281,22 @@ function aplicarTema(){
   const u = user(S.me);
   document.documentElement.style.setProperty('--eu', u.cor || 'var(--ok)');
   const card = $('#euCard');
-  if(card) card.innerHTML = `${avatar(u.id)}<div class="info"><b>${esc(u.nome)}</b><span>${esc(u.cargo||(u.papel==='coordenacao'?'Coordenação':'Analista'))}</span></div>`;
+  if(card) card.innerHTML = `${avatar(u.id)}<div class="info"><b>${esc(u.nome)}</b><span>${esc(u.cargo||(u.papel==='coordenacao'?'Coordenação':u.papel==='admin'?'Administrador':'Analista'))}</span></div>`;
+  aplicarPermissoes();
+}
+
+// mostra/esconde o que é exclusivo do gestor
+function aplicarPermissoes(){
+  const gestor = ehGestor();
+  const abaCoord = document.querySelector('#nav button[data-v="painel"]');
+  if(abaCoord) abaCoord.classList.toggle('hide', !gestor);
+  // filtros que só fazem sentido pra quem vê o time todo
+  const fResp = $('#fResp'), fGroup = $('#fGroup');
+  if(fResp)  fResp.classList.toggle('hide', !gestor);
+  if(fGroup) fGroup.classList.toggle('hide', !gestor);
+  // se um não-gestor estava na aba Coordenação, tira ele de lá
+  if(!gestor && S.view==='painel'){ S.view='board'; const b=document.querySelector('#nav button[data-v="board"]');
+    if(b){ document.querySelectorAll('#nav button').forEach(x=>x.removeAttribute('aria-current')); b.setAttribute('aria-current','page'); } }
 }
 
 function montarSelects(){
