@@ -237,6 +237,8 @@ tbody tr{cursor:pointer}
         <select id="fResp" aria-label="Responsável"><option value="">Todo mundo</option></select>
         <select id="fPri" aria-label="Prioridade"><option value="">Toda prioridade</option><option value="1">Crítica</option><option value="2">Alta</option><option value="3">Média</option><option value="4">Baixa</option></select>
         <select id="fOri" aria-label="Origem"><option value="">Toda origem</option></select>
+        <label class="dtlab" style="font-size:11px;color:var(--mut)">Prazo de <input type="date" id="fDe" aria-label="Prazo de" style="margin-left:4px"></label>
+        <label class="dtlab" style="font-size:11px;color:var(--mut)">até <input type="date" id="fAte" aria-label="Prazo até" style="margin-left:4px"></label>
         <select id="fGroup" aria-label="Agrupar por"><option value="status">Agrupar: Status</option><option value="resp">Agrupar: Responsável</option><option value="cat">Agrupar: Categoria</option><option value="pri">Agrupar: Prioridade</option></select>
         <button class="btn sm" id="limpar">Limpar</button>
       </div>
@@ -326,7 +328,8 @@ const cor  = k => cat(k).cor;
    ========================================================================= */
 const S = {
   me:'u1', view:'board',
-  filtro:{q:'',cat:'',resp:'',pri:'',ori:''},
+  filtro:{q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''},
+  fpainel:{resp:'',de:'',ate:''},
   ordem:{campo:'prazo',asc:true},
   verConcluidas:false,
   users:[
@@ -499,7 +502,9 @@ function filtra(list){
     (!f.cat  || t.cat===f.cat) &&
     (!f.resp || t.resp===f.resp) &&
     (!f.pri  || String(t.pri)===f.pri) &&
-    (!f.ori  || t.origem===f.ori)
+    (!f.ori  || t.origem===f.ori) &&
+    (!f.de   || (t.prazo && t.prazo>=f.de)) &&
+    (!f.ate  || (t.prazo && t.prazo<=f.ate))
   );
 }
 
@@ -557,17 +562,38 @@ function linhaTask(t, extra){
 /* =========================================================================
    5. VIEWS
    ========================================================================= */
+function kpisQuadro(base){
+  const total = base.length;
+  const afazer = base.filter(t=>t.status==='backlog').length;
+  const andam  = base.filter(t=>t.status==='andamento').length;
+  const valid  = base.filter(t=>t.status==='revisao').length;
+  const conc   = base.filter(t=>t.status==='concluido').length;
+  const atras  = base.filter(isAtrasada).length;
+  const abertas= afazer+andam+valid;
+  const pctConc= total? Math.round(100*conc/total) : 0;
+  const box=(l,v,c,s)=>`<div class="kpi" style="padding:11px 13px"><span class="eyebrow">${l}</span><div class="v" style="font-size:22px;color:${c||'var(--tx)'}">${v}</div>${s?`<div class="sub">${s}</div>`:''}</div>`;
+  return `<div class="grid kpis" style="margin-bottom:14px">
+    ${box('Total', total, 'var(--tx)', `${abertas} em aberto`)}
+    ${box('A fazer', afazer)}
+    ${box('Em andamento', andam)}
+    ${box('Em validação', valid)}
+    ${box('Concluídas', conc, 'var(--ok)', `${pctConc}% do total`)}
+    ${box('Atrasadas', atras, atras?'var(--bad)':'var(--mut)')}
+  </div>`;
+}
+
 function vBoard(){
   let base = filtra(S.tasks).filter(t=>t.status!=='expirado');
   if(!ehGestor()) base = base.filter(t=>t.resp===S.me);   // cada um vê só o que é seu
   const grupo = S.grupo || 'status';
+  const kpis = kpisQuadro(base);
 
   // agrupamento por status = kanban clássico com drag
   if(grupo==='status'){
     const wipPorPessoa = {};
     base.filter(t=>t.status==='andamento').forEach(t=>wipPorPessoa[t.resp]=(wipPorPessoa[t.resp]||0)+1);
     const estourouWip = Object.entries(wipPorPessoa).filter(([,n])=>n>CFG.wip);
-    $('#view').innerHTML = `
+    $('#view').innerHTML = kpis + `
     ${estourouWip.length?`<div class="panel" style="border-left:3px solid var(--warn);margin-bottom:14px;padding:12px 16px">
       <b style="font-size:13px">Muita coisa aberta ao mesmo tempo</b>
       <div class="hint" style="margin:4px 0 0">${estourouWip.map(([id,n])=>`${esc(user(id).nome)} com ${n} tarefas em andamento`).join(' · ')}. O limite combinado é ${CFG.wip}. Terminar rende mais que começar.</div>
@@ -598,7 +624,7 @@ function vBoard(){
   else if(grupo==='cat') grupos = Object.entries(CATS).map(([k,c])=>({k, nome:c.nome, filtro:t=>t.cat===k}));
   else                   grupos = Object.entries(PRI).map(([k,p])=>({k, nome:p.n, filtro:t=>String(t.pri)===String(k)}));
 
-  $('#view').innerHTML = `
+  $('#view').innerHTML = kpis + `
   <p class="hint" style="margin:0 0 12px">Agrupado por ${grupo==='resp'?'responsável':grupo==='cat'?'categoria':'prioridade'}. Clique no card para abrir e mudar. (Arrastar só funciona no agrupamento por status.)</p>
   <div class="board">${grupos.map(g=>{
     const list = base.filter(t=>ativa(t) && g.filtro(t)).sort(ordenaPadrao);
@@ -729,15 +755,24 @@ function vRotinas(){
 /* ---------- PAINEL DA COORDENAÇÃO ---------- */
 function vPainel(){
   const h=hoje(), ini=inicioSemana(), fim=fimSemana();
-  const abertas   = S.tasks.filter(ativa);
+  const fp = S.fpainel;
+  // filtra a base do painel por pessoa e por período (prazo)
+  const dentro = t => (!fp.resp || t.resp===fp.resp)
+                   && (!fp.de   || (t.prazo && t.prazo>=fp.de))
+                   && (!fp.ate  || (t.prazo && t.prazo<=fp.ate));
+  const TASKS = S.tasks.filter(dentro);
+  const filtrando = fp.resp || fp.de || fp.ate;
+
+  const abertas   = TASKS.filter(ativa);
   const atrasadas = abertas.filter(isAtrasada);
   const semana    = abertas.filter(t=>t.prazo && t.prazo>=ini && t.prazo<=fim);
-  const conc30    = S.tasks.filter(t=>t.status==='concluido' && t.concluida && diffD(t.concluida,h)<=30 && diffD(t.concluida,h)>=0);
+  const conc30    = TASKS.filter(t=>t.status==='concluido' && t.concluida && diffD(t.concluida,h)<=30 && diffD(t.concluida,h)>=0);
   const np        = conc30.filter(noPrazo);
   const sla       = conc30.length?Math.round(100*np.length/conc30.length):null;
-  const expiradas = S.tasks.filter(t=>t.status==='expirado' && diffD(t.criada,h)<=30);
+  const expiradas = TASKS.filter(t=>t.status==='expirado' && diffD(t.criada,h)<=30);
 
-  const pessoas = S.users.map(u=>{
+  const pessoasBase = fp.resp ? S.users.filter(u=>u.id===fp.resp) : S.users;
+  const pessoas = pessoasBase.map(u=>{
     const ab = abertas.filter(t=>t.resp===u.id);
     const cc = conc30.filter(t=>t.resp===u.id);
     const okc= cc.filter(noPrazo).length;
@@ -752,7 +787,7 @@ function vPainel(){
   const dias = Array.from({length:7},(_,i)=>addDias(ini,i));
   const entregasDia = Array.from({length:14},(_,i)=>{
     const d = addDias(h,-13+i);
-    return {d, n:S.tasks.filter(t=>t.concluida===d).length};
+    return {d, n:TASKS.filter(t=>t.concluida===d).length};
   });
   const maxE = Math.max(1, ...entregasDia.map(x=>x.n));
 
@@ -765,6 +800,16 @@ function vPainel(){
   ].filter((v,i,a)=>a.findIndex(x=>x.t.id===v.t.id)===i);
 
   $('#view').innerHTML = `
+  <div class="panel" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span class="eyebrow">Filtrar painel</span>
+    <select id="pResp" style="background:var(--panel2);border:1px solid var(--line);padding:7px 10px;border-radius:8px">
+      <option value="">Toda a equipe</option>
+      ${S.users.map(u=>`<option value="${u.id}" ${fp.resp===u.id?'selected':''}>${esc(u.nome)}</option>`).join('')}
+    </select>
+    <label style="font-size:11px;color:var(--mut)">de <input type="date" id="pDe" value="${fp.de}" style="margin-left:4px;background:var(--panel2);border:1px solid var(--line);padding:6px 8px;border-radius:8px"></label>
+    <label style="font-size:11px;color:var(--mut)">até <input type="date" id="pAte" value="${fp.ate}" style="margin-left:4px;background:var(--panel2);border:1px solid var(--line);padding:6px 8px;border-radius:8px"></label>
+    ${filtrando?`<button class="btn sm" id="pLimpar">Limpar</button><span class="hint" style="margin:0;color:var(--eu)">filtrando${fp.resp?' · '+esc(user(fp.resp).nome):''}${(fp.de||fp.ate)?' · período':''}</span>`:''}
+  </div>
   <div class="grid kpis" style="margin-bottom:16px">
     ${kpi('Abertas agora', abertas.length, `${semana.length} vencem nesta semana`)}
     ${kpi('Atrasadas', atrasadas.length, atrasadas.length?'Exige decisão hoje':'Nenhuma vencida', atrasadas.length?'var(--bad)':'var(--ok)')}
@@ -845,6 +890,11 @@ function vPainel(){
     </div>
   </div>`;
   ligarLinhas();
+  const pr=$('#pResp'), pd=$('#pDe'), pa=$('#pAte'), pl=$('#pLimpar');
+  if(pr) pr.onchange = e => { S.fpainel.resp = e.target.value; render(); };
+  if(pd) pd.onchange = e => { S.fpainel.de   = e.target.value; render(); };
+  if(pa) pa.onchange = e => { S.fpainel.ate  = e.target.value; render(); };
+  if(pl) pl.onclick  = () => { S.fpainel = {resp:'',de:'',ate:''}; render(); };
 }
 const kpi = (l,v,s,c) => `<div class="kpi"><span class="eyebrow">${l}</span><div class="v" style="color:${c||'var(--tx)'}">${v}</div><div class="sub">${s}</div></div>`;
 
@@ -1326,10 +1376,12 @@ $('#fCat').onchange = e => { S.filtro.cat = e.target.value; render(); };
 $('#fResp').onchange= e => { S.filtro.resp= e.target.value; render(); };
 $('#fPri').onchange = e => { S.filtro.pri = e.target.value; render(); };
 $('#fOri').onchange = e => { S.filtro.ori = e.target.value; render(); };
+$('#fDe').onchange  = e => { S.filtro.de  = e.target.value; render(); };
+$('#fAte').onchange = e => { S.filtro.ate = e.target.value; render(); };
 $('#fGroup').onchange = e => { S.grupo = e.target.value; render(); };
 $('#limpar').onclick = () => {
-  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:''};
-  ['#q','#fCat','#fResp','#fPri','#fOri'].forEach(s=>$(s).value=''); render();
+  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''};
+  ['#q','#fCat','#fResp','#fPri','#fOri','#fDe','#fAte'].forEach(s=>$(s)&&($(s).value='')); render();
 };
 $('#newTask').onclick = () => abrirTask(null);
 $('#newRot').onclick  = () => abrirRotina(null);
@@ -1338,8 +1390,8 @@ $('#zerar').onclick   = () => {
   if(!confirm('Recomeçar do zero apaga todas as tarefas e rotinas deste navegador e não pode ser desfeito. Deseja continuar?\n\nDica: use "Salvar cópia" antes, se quiser guardar o que já tem.')) return;
   limparTudo();
   S.users = S.users; S.tasks = []; S.rotinas = [];
-  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:''};
-  ['#q','#fCat','#fResp','#fPri','#fOri'].forEach(s=>$(s)&&($(s).value=''));
+  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''};
+  ['#q','#fCat','#fResp','#fPri','#fOri','#fDe','#fAte'].forEach(s=>$(s)&&($(s).value=''));
   render(); toast('Tudo limpo. Comece criando uma tarefa.');
 };
 
