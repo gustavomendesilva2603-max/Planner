@@ -209,7 +209,6 @@ tbody tr{cursor:pointer}
       <button data-v="board" aria-current="page">Quadro<span class="badge" id="nb"></span></button>
       <button data-v="minhas">Minhas tarefas<span class="badge" id="nm"></span></button>
       <button data-v="lista">Lista completa</button>
-      <button data-v="rotinas">Rotinas<span class="badge" id="nr"></span></button>
       <button data-v="painel">Coordenação<span class="badge" id="na"></span></button>
     </nav>
 
@@ -245,11 +244,10 @@ tbody tr{cursor:pointer}
         <select id="fOri" aria-label="Origem"><option value="">Toda origem</option></select>
         <label class="dtlab" style="font-size:11px;color:var(--mut)">Prazo de <input type="date" id="fDe" aria-label="Prazo de" style="margin-left:4px"></label>
         <label class="dtlab" style="font-size:11px;color:var(--mut)">até <input type="date" id="fAte" aria-label="Prazo até" style="margin-left:4px"></label>
-        <select id="fGroup" aria-label="Agrupar por"><option value="status">Agrupar: Status</option><option value="resp">Agrupar: Responsável</option><option value="cat">Agrupar: Categoria</option><option value="pri">Agrupar: Prioridade</option></select>
+        <select id="fGroup" aria-label="Agrupar por"><option value="status">Agrupar: Status</option><option value="semana">Agrupar: Semana</option><option value="resp">Agrupar: Responsável</option><option value="cat">Agrupar: Categoria</option><option value="pri">Agrupar: Prioridade</option></select>
         <button class="btn sm" id="limpar">Limpar</button>
       </div>
       <div class="spacer"></div>
-      <button class="btn" id="newRot">+ Rotina</button>
       <button class="btn pri" id="newTask">+ Nova tarefa</button>
     </div>
     <div class="wrap" id="view"></div>
@@ -313,11 +311,35 @@ const stName = k => (STATUS.find(s=>s.k===k) || (k==='expirado'?{n:'Expirada'}:S
 const PRI = {1:{n:'Crítica',c:'var(--bad)',sla:0}, 2:{n:'Alta',c:'var(--warn)',sla:2}, 3:{n:'Média',c:'var(--bi)',sla:5}, 4:{n:'Baixa',c:'var(--mut2)',sla:10}};
 const PRI_FB = {n:'—', c:'var(--mut2)', sla:5};
 const DIAS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
 // rótulos coloridos, como as etiquetas do Planner
 const ROTULOS = {
   rosa:'#F06595', vermelho:'#F03E3E', laranja:'#F76707', amarelo:'#F2C14E',
   verde:'#37B24D', azul:'#3B9EFF', roxo:'#9775FA', ciano:'#22B8CF', cinza:'#868E96'
 };
+
+// tipos de repetição dentro da própria tarefa
+const REPETE = {
+  '':        'Não repete',
+  diaria:    'Todo dia',
+  uteis:     'Dias úteis (seg–sex)',
+  semanal:   'Toda semana',
+  mensal:    'Todo mês',
+  anual:     'Todo ano'
+};
+// calcula a data da PRÓXIMA ocorrência a partir de uma data base
+function proximaData(base, tipo){
+  if(!base || !tipo) return null;
+  let d = base;
+  switch(tipo){
+    case 'diaria':  return addDias(d,1);
+    case 'uteis':   { d=addDias(d,1); while(dow(d)===0||dow(d)===6) d=addDias(d,1); return d; }
+    case 'semanal': return addDias(d,7);
+    case 'mensal':  { const x=new Date(d+'T12:00'); x.setMonth(x.getMonth()+1); return x.toISOString().slice(0,10); }
+    case 'anual':   { const x=new Date(d+'T12:00'); x.setFullYear(x.getFullYear()+1); return x.toISOString().slice(0,10); }
+    default: return null;
+  }
+}
 
 const CFG = {
   wip: 3,              // limite de tarefas simultâneas em "Em andamento" por pessoa
@@ -397,7 +419,8 @@ function limparTudo(){
   const t = o => Object.assign({
     id:uid(), titulo:'', desc:'', cat:'BI', origem:'projeto', resp:'u1', solicitante:'', pri:3,
     status:'backlog', criada:h, inicio:null, prazo:null, est:2, gasto:0, check:[], rotinaId:null,
-    rotulos:[], concluida:null, coment:[], hist:[]
+    rotulos:[], repete:'',
+    concluida:null, coment:[], hist:[]
   }, o);
 
   S.tasks = [
@@ -541,7 +564,7 @@ function cardHTML(t){
       <span class="tag" style="color:${c}">${cat(t.cat).nome}</span>
       ${t.prazo?`<span class="due ${cls}">${cls==='late'?'⚠ ':''}${fmt(t.prazo)}</span>`:'<span class="due" style="color:var(--warn)">sem prazo</span>'}
       ${t.check.length?`<span class="rot" style="color:var(--mut)">☑ ${t.check.filter(x=>x.d).length}/${t.check.length}</span>`:''}
-      ${t.rotinaId?'<span class="rot">↻</span>':''}
+      ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}
       ${avatar(t.resp,'margin-left:auto')}
     </span>
     <span class="move">
@@ -557,7 +580,7 @@ function linhaTask(t, extra){
     <span class="p" style="background:${pri(t.pri).c}"></span>
     <span class="tag" style="color:${cor(t.cat)}">${cat(t.cat).nome}</span>
     <span style="flex:1;min-width:0">${esc(t.titulo)}</span>
-    ${t.rotinaId?'<span class="rot">↻</span>':''}
+    ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}
     ${extra?`<span style="color:var(--bad);font-size:11px">${esc(extra)}</span>`:''}
     <span class="due ${!ativa(t)||dd===null?'':dd<0?'late':dd<=1?'soon':''}">${fmt(t.prazo)}</span>
     ${avatar(t.resp)}</div>`;
@@ -626,10 +649,20 @@ function vBoard(){
   let grupos;
   if(grupo==='resp')     grupos = S.users.map(u=>({k:u.id, nome:u.nome, filtro:t=>t.resp===u.id}));
   else if(grupo==='cat') grupos = Object.entries(CATS).map(([k,c])=>({k, nome:c.nome, filtro:t=>t.cat===k}));
+  else if(grupo==='semana'){
+    const ini=inicioSemana(), fimP=addDias(ini,6), fimProx=addDias(ini,13);
+    grupos = [
+      {k:'atr',   nome:'Atrasadas',      filtro:t=>t.prazo && t.prazo<ini},
+      {k:'esta',  nome:'Esta semana',    filtro:t=>t.prazo && t.prazo>=ini && t.prazo<=fimP},
+      {k:'prox',  nome:'Próxima semana', filtro:t=>t.prazo && t.prazo>fimP && t.prazo<=fimProx},
+      {k:'dep',   nome:'Depois',         filtro:t=>t.prazo && t.prazo>fimProx},
+      {k:'semp',  nome:'Sem prazo',      filtro:t=>!t.prazo}
+    ];
+  }
   else                   grupos = Object.entries(PRI).map(([k,p])=>({k, nome:p.n, filtro:t=>String(t.pri)===String(k)}));
 
   $('#view').innerHTML = kpis + `
-  <p class="hint" style="margin:0 0 12px">Agrupado por ${grupo==='resp'?'responsável':grupo==='cat'?'categoria':'prioridade'}. Clique no card para abrir e mudar. (Arrastar só funciona no agrupamento por status.)</p>
+  <p class="hint" style="margin:0 0 12px">Agrupado por ${grupo==='resp'?'responsável':grupo==='cat'?'categoria':grupo==='semana'?'semana (pelo prazo)':'prioridade'}. Clique no card para abrir e mudar. (Arrastar só funciona no agrupamento por status.)</p>
   <div class="board">${grupos.map(g=>{
     const list = base.filter(t=>ativa(t) && g.filtro(t)).sort(ordenaPadrao);
     return `<section class="col" aria-label="${esc(g.nome)}">
@@ -704,7 +737,7 @@ function vLista(){
     <table><thead><tr>
       ${th('titulo','Tarefa')}${th('cat','Categoria')}<th>Origem</th>${th('resp','Responsável')}${th('pri','Prioridade')}${th('status','Status')}${th('prazo','Prazo')}
     </tr></thead><tbody>${ts.map(t=>`<tr data-id="${t.id}" tabindex="0">
-      <td>${esc(t.titulo)} ${t.rotinaId?'<span class="rot">↻</span>':''}</td>
+      <td>${esc(t.titulo)} ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}</td>
       <td><span class="tag" style="color:${cor(t.cat)}">${cat(t.cat).nome}</span></td>
       <td style="color:var(--mut)">${esc(ORIGENS[t.origem]||'—')}</td>
       <td>${avatar(t.resp,'display:inline-grid;vertical-align:middle')} ${esc(user(t.resp).nome)}</td>
@@ -964,6 +997,13 @@ function abrirTask(id){
       <div class="f"><label>Rótulos</label>
         <div class="rotpick" id="rotpick">${Object.entries(ROTULOS).map(([k,c])=>`<button type="button" data-rot="${k}" style="background:${c}" title="${k}" aria-pressed="${(t.rotulos||[]).includes(k)}" aria-label="Rótulo ${k}"></button>`).join('')}</div></div>
 
+      <div class="row">
+        <div class="f"><label for="f_repete">Repetição</label>
+          <select id="f_repete">${Object.entries(REPETE).map(([k,n])=>`<option value="${k}" ${(t.repete||'')===k?'selected':''}>${n}</option>`).join('')}</select>
+          <span class="log">Ao concluir, o sistema cria a próxima automaticamente.</span></div>
+        <div class="f"></div>
+      </div>
+
       <div class="f"><label>Checklist</label><div id="chk"></div>
         <div style="display:flex;gap:8px;margin-top:8px">
           <input id="novoChk" placeholder="Adicionar item e apertar Enter" aria-label="Novo item do checklist">
@@ -1053,7 +1093,7 @@ function abrirTask(id){
       titulo:q('#f_tit').value.trim(), desc:q('#f_desc').value, cat:q('#f_cat').value,
       origem:q('#f_ori').value, resp:q('#f_resp').value, pri:+q('#f_pri').value,
       status:q('#f_st').value, prazo:q('#f_prazo').value||null, inicio:q('#f_inicio').value||null,
-      solicitante:q('#f_sol').value.trim(), rotulos:rots, check:chk
+      solicitante:q('#f_sol').value.trim(), rotulos:rots, repete:q('#f_repete').value||'', check:chk
     };
     if(novo){
       const nova = Object.assign({id:uid(),criada:hoje(),rotinaId:null,concluida:null,coment:[],hist:[]}, o);
@@ -1230,12 +1270,35 @@ function mover(id, novoSt){
   t.hist.push({campo:'status', de:stName(t.status), para:stName(novoSt), quem:S.me, quando:hoje()});
   t.status = novoSt;
   t.concluida = novoSt==='concluido' ? (t.concluida || hoje()) : null;
+
+  // recorrência: ao concluir uma tarefa que repete, cria a próxima ocorrência
+  let criada = null;
+  if(novoSt==='concluido' && t.repete){
+    const baseData = t.prazo || t.concluida || hoje();
+    const prox = proximaData(baseData, t.repete);
+    const origem = t.repeteOrigem || t.id;
+    if(prox && !S.tasks.some(x=>(x.repeteOrigem||x.id)===origem && x.prazo===prox && x.status!=='concluido')){
+      criada = {
+        id: uid(), titulo:t.titulo, desc:t.desc, cat:t.cat, origem:t.origem, resp:t.resp,
+        solicitante:t.solicitante, pri:t.pri, status:'backlog', criada:hoje(),
+        inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete, repeteOrigem:origem,
+        check:(t.check||[]).map(c=>({t:c.t,d:false})), concluida:null, coment:[], hist:[]
+      };
+      S.tasks.push(criada);
+    }
+  }
   render();
-  if(ONLINE){ DB.moverTask(id, t.status, t.concluida).catch(e=>toast('Erro ao mover: '+(e.message||e),true)); }
+  if(ONLINE){
+    DB.moverTask(id, t.status, t.concluida).catch(e=>toast('Erro ao mover: '+(e.message||e),true));
+    if(criada) DB.salvarTask(criada, true).then(recarregar).catch(e=>toast('Erro ao repetir: '+(e.message||e),true));
+  }
   const card = $('#view').querySelector(`.card[data-id="${id}"]`);
   if(card) card.focus();
-  toast(`"${t.titulo.slice(0,30)}${t.titulo.length>30?'…':''}" → ${stName(novoSt)}`, false, () => {
-    t.status = stAntes; t.concluida = conclAntes; t.hist.pop(); render();
+  const msgRep = criada ? ` · próxima criada p/ ${fmt(criada.prazo)}` : '';
+  toast(`"${t.titulo.slice(0,26)}${t.titulo.length>26?'…':''}" → ${stName(novoSt)}${msgRep}`, false, () => {
+    t.status = stAntes; t.concluida = conclAntes; t.hist.pop();
+    if(criada){ S.tasks = S.tasks.filter(x=>x.id!==criada.id); if(ONLINE) DB.apagarTask(criada.id).catch(()=>{}); }
+    render();
     if(ONLINE){ DB.moverTask(id, stAntes, conclAntes).catch(()=>{}); }
   });
 }
@@ -1287,8 +1350,8 @@ function ligarLinhas(){
 /* =========================================================================
    8. RENDER + BOOT
    ========================================================================= */
-const TITULOS = {board:'Quadro', minhas:'Minhas tarefas', lista:'Lista completa', rotinas:'Rotinas', painel:'Painel da coordenação'};
-const VIEWS   = {board:vBoard, minhas:vMinhas, lista:vLista, rotinas:vRotinas, painel:vPainel};
+const TITULOS = {board:'Quadro', minhas:'Minhas tarefas', lista:'Lista completa', painel:'Painel da coordenação'};
+const VIEWS   = {board:vBoard, minhas:vMinhas, lista:vLista, painel:vPainel};
 
 function render(){
   if(S.view==='painel' && !ehGestor()) S.view='board';   // trava de segurança
@@ -1299,7 +1362,6 @@ function render(){
   const abertas = S.tasks.filter(ativa);
   $('#nb').textContent = ehGestor() ? abertas.length : abertas.filter(t=>t.resp===S.me).length;
   $('#nm').textContent = abertas.filter(t=>t.resp===S.me).length;
-  $('#nr').textContent = S.rotinas.filter(r=>r.ativa).length;
   const at = abertas.filter(isAtrasada).length;
   $('#na').textContent = at || '';
   $('#na').classList.toggle('alert', !!at);
@@ -1369,7 +1431,6 @@ $('#limpar').onclick = () => {
   ['#q','#fCat','#fResp','#fPri','#fOri','#fDe','#fAte'].forEach(s=>$(s)&&($(s).value='')); render();
 };
 $('#newTask').onclick = () => abrirTask(null);
-$('#newRot').onclick  = () => abrirRotina(null);
 $('#ajuda').onclick   = abrirAjuda;
 $('#tema').onclick = () => {
   const atual = document.documentElement.getAttribute('data-tema')==='claro' ? 'escuro' : 'claro';
@@ -1488,8 +1549,8 @@ const DB = {
 function fromRow(r){
   return {id:r.id, titulo:r.titulo, desc:r.descricao||'', cat:r.categoria_id, origem:r.origem||'projeto',
     resp:r.responsavel, solicitante:r.solicitante||'', pri:r.prioridade, status:r.status,
-    criada:(r.criado_em||'').slice(0,10), inicio:r.data_inicio||null, prazo:r.prazo, est:Number(r.horas_est)||0, gasto:Number(r.horas_gastas)||0,
-    rotulos:Array.isArray(r.rotulos)?r.rotulos:[],
+    criada:(r.criado_em||'').slice(0,10), inicio:r.data_inicio||null, prazo:r.prazo,
+    rotulos:Array.isArray(r.rotulos)?r.rotulos:[], repete:r.repete||'', repeteOrigem:r.repete_origem||null,
     check:(r.checklist||[]).sort((a,b)=>a.ordem-b.ordem).map(c=>({id:c.id,t:c.texto,d:c.feito})),
     rotinaId:r.rotina_id, concluida:r.concluido_em,
     coment:(r.comentarios||[]).map(c=>({autor:c.autor,texto:c.texto,quando:(c.criado_em||'').slice(0,10)})), hist:[]};
@@ -1500,7 +1561,8 @@ function toRow(t){
   const criador = ehUUID(user(S.me).id) ? user(S.me).id : null;
   return {titulo:t.titulo, descricao:t.desc, categoria_id:t.cat, origem:t.origem, responsavel:resp,
     solicitante:t.solicitante, prioridade:t.pri, status:t.status, prazo:t.prazo||null, data_inicio:t.inicio||null,
-    rotulos:t.rotulos||[], concluido_em:t.concluida||null, criado_por:criador};
+    rotulos:t.rotulos||[], repete:t.repete||'', repete_origem:ehUUID(t.repeteOrigem)?t.repeteOrigem:null,
+    concluido_em:t.concluida||null, criado_por:criador};
 }
 async function sincronizarChecklist(t){
   // estratégia simples e segura: apaga os itens da tarefa e regrava
