@@ -248,6 +248,7 @@ tbody tr{cursor:pointer}
         <button class="btn sm" id="limpar">Limpar</button>
       </div>
       <div class="spacer"></div>
+      <button class="btn sm" id="temaTop" title="Alternar tema claro/escuro" style="margin-right:8px">🌙 Tema</button>
       <button class="btn pri" id="newTask">+ Nova tarefa</button>
     </div>
     <div class="wrap" id="view"></div>
@@ -1432,13 +1433,22 @@ $('#limpar').onclick = () => {
 };
 $('#newTask').onclick = () => abrirTask(null);
 $('#ajuda').onclick   = abrirAjuda;
-$('#tema').onclick = () => {
+function aplicaTema(t){
+  document.documentElement.setAttribute('data-tema', t);
+  try{ localStorage.setItem('central-tema', t); }catch(e){}
+  const lbl = t==='claro' ? '🌙 Escuro' : '☀ Claro';
+  const b1=document.querySelector('#temaTop'), b2=document.querySelector('#tema');
+  if(b1) b1.textContent = lbl;
+  if(b2) b2.textContent = t==='claro' ? '🌙 / ☀ Tema' : '☀ / 🌙 Tema';
+}
+function toggleTema(){
   const atual = document.documentElement.getAttribute('data-tema')==='claro' ? 'escuro' : 'claro';
-  document.documentElement.setAttribute('data-tema', atual);
-  try{ localStorage.setItem('central-tema', atual); }catch(e){}
-};
+  aplicaTema(atual);
+}
+$('#tema').onclick = toggleTema;
+if($('#temaTop')) $('#temaTop').onclick = toggleTema;
 // aplica tema salvo ao abrir
-try{ const tm=localStorage.getItem('central-tema'); if(tm) document.documentElement.setAttribute('data-tema', tm); }catch(e){}
+try{ const tm=localStorage.getItem('central-tema')||'escuro'; aplicaTema(tm); }catch(e){}
 $('#zerar').onclick   = () => {
   if(!confirm('Recomeçar do zero apaga todas as tarefas e rotinas deste navegador e não pode ser desfeito. Deseja continuar?\n\nDica: use "Salvar cópia" antes, se quiser guardar o que já tem.')) return;
   limparTudo();
