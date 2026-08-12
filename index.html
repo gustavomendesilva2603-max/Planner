@@ -229,6 +229,7 @@ tbody tr{cursor:pointer}
         <button class="btn sm" id="zerar">Recomeçar</button>
       </div>
       <div class="log" id="salvoInfo" style="margin-top:8px"></div>
+      <div class="log" style="margin-top:4px;opacity:.6">versão 2026-08-12 · tema+semana+repetição</div>
     </div>
   </aside>
 
@@ -248,7 +249,7 @@ tbody tr{cursor:pointer}
         <button class="btn sm" id="limpar">Limpar</button>
       </div>
       <div class="spacer"></div>
-      <button class="btn sm" id="temaTop" title="Alternar tema claro/escuro" style="margin-right:8px">🌙 Tema</button>
+      <button class="btn sm" id="temaTop" title="Alternar tema" style="margin-right:8px;font-weight:600">🌙 Modo Escuro</button>
       <button class="btn pri" id="newTask">+ Nova tarefa</button>
     </div>
     <div class="wrap" id="view"></div>
@@ -1436,10 +1437,10 @@ $('#ajuda').onclick   = abrirAjuda;
 function aplicaTema(t){
   document.documentElement.setAttribute('data-tema', t);
   try{ localStorage.setItem('central-tema', t); }catch(e){}
-  const lbl = t==='claro' ? '🌙 Escuro' : '☀ Claro';
   const b1=document.querySelector('#temaTop'), b2=document.querySelector('#tema');
-  if(b1) b1.textContent = lbl;
-  if(b2) b2.textContent = t==='claro' ? '🌙 / ☀ Tema' : '☀ / 🌙 Tema';
+  // mostra a ação: se está escuro, oferece "Modo Claro"; se claro, "Modo Escuro"
+  if(b1) b1.textContent = t==='claro' ? '🌙 Modo Escuro' : '☀️ Modo Claro';
+  if(b2) b2.textContent = t==='claro' ? '🌙 Modo Escuro' : '☀️ Modo Claro';
 }
 function toggleTema(){
   const atual = document.documentElement.getAttribute('data-tema')==='claro' ? 'escuro' : 'claro';
