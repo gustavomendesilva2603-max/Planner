@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-tema="claro">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Central da Equipe — Trade Marketing</title>
@@ -1449,7 +1449,7 @@ function toggleTema(){
 $('#tema').onclick = toggleTema;
 if($('#temaTop')) $('#temaTop').onclick = toggleTema;
 // aplica tema salvo ao abrir
-try{ const tm=localStorage.getItem('central-tema')||'escuro'; aplicaTema(tm); }catch(e){}
+try{ const tm=localStorage.getItem('central-tema')||'claro'; aplicaTema(tm); }catch(e){}
 $('#zerar').onclick   = () => {
   if(!confirm('Recomeçar do zero apaga todas as tarefas e rotinas deste navegador e não pode ser desfeito. Deseja continuar?\n\nDica: use "Salvar cópia" antes, se quiser guardar o que já tem.')) return;
   limparTudo();
