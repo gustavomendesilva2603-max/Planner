@@ -1,0 +1,1695 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="claro">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Central da Equipe — Trade Marketing</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#0E1418; --panel:#151D23; --panel2:#1B252C; --line:#26333B;
+  --tx:#E7EFF3; --mut:#7C8F9B; --mut2:#4E606C;
+  --bi:#3FC8E8; --adm:#F2A65A; --cha:#F0577A; --ges:#A98BF5; --dev:#5AD6A0;
+  --ok:#2DD4A7; --warn:#F2C14E; --bad:#F0577A;
+  --eu:#2DD4A7;
+  --r:10px;
+}
+html[data-tema="claro"]{
+  --bg:#F4F6F8; --panel:#FFFFFF; --panel2:#EEF1F4; --line:#D9E0E6;
+  --tx:#1A2530; --mut:#5C6B78; --mut2:#9AA8B4;
+  --ok:#0FA37F; --warn:#C98A00; --bad:#D93A56;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--tx);font-family:'Space Grotesk',system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+.mono{font-family:'IBM Plex Mono',monospace}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+:focus-visible{outline:2px solid var(--ok);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.app{display:grid;grid-template-columns:224px 1fr;height:100vh}
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px;gap:22px;overflow:auto}
+.brand{display:flex;flex-direction:column;gap:2px}
+.brand b{font-size:16px;letter-spacing:-.02em}
+.brand::before{content:"";width:26px;height:3px;border-radius:3px;background:var(--eu);margin-bottom:8px;transition:background .25s ease}
+main{border-top:2px solid transparent;background:linear-gradient(var(--eu) 0 0) top/100% 2px no-repeat;background-color:transparent}
+.eu-card{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--eu);border-radius:10px;padding:9px 11px;margin-top:7px}
+.eu-card .info{min-width:0}
+.eu-card .info b{font-size:13px;display:block;line-height:1.2}
+.eu-card .info span{font-size:11px;color:var(--mut)}
+.eu-card .av{width:30px;height:30px;font-size:11px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--mut);text-align:left;width:100%}
+.nav button:hover{background:var(--panel2);color:var(--tx)}
+.nav button[aria-current="page"]{background:var(--panel2);color:var(--tx);box-shadow:inset 2px 0 0 var(--ok)}
+.nav .badge{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--mut2)}
+.nav .badge.alert{color:var(--bad)}
+.who{margin-top:auto;border-top:1px solid var(--line);padding-top:14px}
+.who select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px}
+
+main{overflow:auto;display:flex;flex-direction:column}
+.top{position:sticky;top:0;z-index:20;background:rgba(14,20,24,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.top h1{margin:0;font-size:19px;letter-spacing:-.02em}
+.spacer{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);padding:8px 13px;border-radius:8px;color:var(--tx)}
+.btn:hover{border-color:var(--mut2)}
+.btn.pri{background:var(--eu);border-color:var(--eu);color:#0B1418;font-weight:700}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.sm{padding:5px 9px;font-size:12px}
+.btn.danger{color:var(--bad)}
+.wrap{padding:20px 24px 70px}
+
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters input,.filters select{background:var(--panel);border:1px solid var(--line);padding:7px 10px;border-radius:8px}
+.chip{border:1px solid var(--line);padding:5px 10px;border-radius:999px;font-size:12px;color:var(--mut);display:inline-flex;gap:6px;align-items:center}
+.chip.on{color:var(--tx);border-color:currentColor}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block;flex:none}
+
+.board{display:grid;grid-template-columns:repeat(4,minmax(230px,1fr));gap:14px;align-items:start}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-height:140px}
+.col>header{padding:11px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.col>header b{font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.col>header .n{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut)}
+.col>header .n.over{color:var(--bad)}
+.col .body{padding:10px;display:flex;flex-direction:column;gap:9px;min-height:60px}
+.col.drop{background:var(--panel2);box-shadow:inset 0 0 0 1px var(--ok)}
+
+.card{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--mut2);border-radius:9px;padding:11px;cursor:grab;display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
+.card:hover{border-color:var(--mut2)}
+.card.dragging{opacity:.4}
+.card .t{font-size:13.5px;line-height:1.35;font-weight:500}
+.card .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--mut)}
+.card .move{display:flex;gap:6px;margin-top:2px}
+.card .move button{flex:1;border:1px solid var(--line);border-radius:6px;padding:5px 0;font-size:11px;color:var(--mut);background:var(--panel)}
+.card .move button:hover:not(:disabled){color:var(--tx);border-color:var(--mut2)}
+.card .move button:disabled{opacity:.3;cursor:default}
+.card .move button.next{color:var(--ok);border-color:rgba(45,212,167,.35)}
+.card .rots{display:flex;gap:4px;flex-wrap:wrap}
+.rotulo{height:6px;width:26px;border-radius:3px;display:inline-block}
+.rotulo.lg{height:auto;width:auto;padding:2px 8px;font-size:10px;color:#0B1418;font-weight:600;font-family:'IBM Plex Mono',monospace}
+.card .conc{position:absolute;top:9px;right:9px;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--mut2);background:var(--panel);display:grid;place-items:center;font-size:11px;color:transparent;padding:0}
+.card{position:relative}
+.card .conc:hover{border-color:var(--ok);color:var(--ok)}
+.card .conc.on{background:var(--ok);border-color:var(--ok);color:#0B1418}
+.rotpick{display:flex;gap:8px;flex-wrap:wrap}
+.rotpick button{width:26px;height:26px;border-radius:7px;border:2px solid transparent;cursor:pointer}
+.rotpick button[aria-pressed="true"]{border-color:var(--tx);box-shadow:0 0 0 2px var(--bg) inset}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;padding:2px 6px;border-radius:5px;background:rgba(255,255,255,.05)}
+.av{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;font-family:'IBM Plex Mono',monospace;background:#2A3941;color:var(--tx);flex:none}
+.due{font-family:'IBM Plex Mono',monospace;font-size:11px}
+.due.late{color:var(--bad)} .due.soon{color:var(--warn)}
+.p{width:4px;height:14px;border-radius:2px;display:inline-block;flex:none}
+.rot{font-size:10px;color:var(--dev);font-family:'IBM Plex Mono',monospace}
+.bar{height:3px;background:#2A3941;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+th[data-sort]{cursor:pointer;user-select:none}
+th[data-sort]:hover{color:var(--tx)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:hover{background:var(--panel2)}
+tbody tr{cursor:pointer}
+
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.kpi .v{font-family:'IBM Plex Mono',monospace;font-size:27px;font-weight:600;letter-spacing:-.02em;line-height:1.1;margin-top:6px}
+.kpi .sub{font-size:11px;color:var(--mut);margin-top:4px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.panel>h3{margin:0 0 3px;font-size:14px}
+.panel .hint{font-size:11.5px;color:var(--mut);margin-bottom:14px;line-height:1.5}
+
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.day{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;min-height:118px;display:flex;flex-direction:column;gap:6px}
+.day.today{border-color:var(--ok)}
+.day.past{opacity:.75}
+.day .d{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--mut);display:flex;justify-content:space-between}
+.day .it{font-size:11px;line-height:1.3;padding:4px 6px;border-radius:6px;background:rgba(255,255,255,.04);border-left:2px solid var(--mut2);cursor:pointer;text-align:left;width:100%}
+.day .it:hover{background:rgba(255,255,255,.09)}
+
+.person{display:grid;grid-template-columns:150px 1fr 62px 62px 62px 66px;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.person:last-child{border-bottom:none}
+.person .nm{display:flex;align-items:center;gap:8px;min-width:0}
+.person .nm span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person .num{font-family:'IBM Plex Mono',monospace;text-align:right}
+.load{height:8px;background:#2A3941;border-radius:4px;display:flex;overflow:hidden}
+.load i{display:block;height:100%}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:12px}
+
+.spark{display:flex;align-items:flex-end;gap:3px;height:64px;margin-top:6px}
+.spark div{flex:1;background:var(--ok);border-radius:2px 2px 0 0;min-height:2px;position:relative}
+.spark div.zero{background:#2A3941}
+.sparkx{display:flex;gap:3px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--mut2);margin-top:4px}
+.sparkx span{flex:1;text-align:center}
+
+.ov{position:fixed;inset:0;background:rgba(6,10,12,.74);display:none;z-index:100;padding:24px;overflow:auto}
+.ov.on{display:block}
+.sheet{max-width:860px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.sheet>header{padding:15px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sheet .in{padding:20px;display:grid;gap:16px}
+.f{display:flex;flex-direction:column;gap:6px}
+.f label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+.f input,.f select,.f textarea{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+.f textarea{min-height:74px;resize:vertical}
+.f .err{color:var(--bad);font-size:11px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.sheet>footer{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.line{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.line:last-child{border-bottom:none}
+.line.clic{cursor:pointer}
+.line.clic:hover{background:var(--panel2)}
+.line input[type=checkbox]{width:15px;height:15px;accent-color:var(--ok);flex:none}
+.line .done{text-decoration:line-through;color:var(--mut)}
+.days{display:flex;gap:6px;flex-wrap:wrap}
+.days button{border:1px solid var(--line);padding:6px 10px;border-radius:7px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut)}
+.days button[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#06231B;font-weight:600}
+.empty{color:var(--mut);font-size:12.5px;padding:18px;text-align:center;border:1px dashed var(--line);border-radius:9px}
+.hide{display:none!important}
+.log{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut);padding:4px 0}
+
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--ok);padding:11px 16px;border-radius:9px;z-index:200;opacity:0;pointer-events:none;font-size:13px;max-width:90vw}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.bad{border-left-color:var(--bad)}
+
+@media(max-width:1180px){.board{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:1000px){
+  .person{grid-template-columns:1fr 58px 58px;grid-template-areas:'nm nm nm' 'ld ld ld' 'a b c'}
+  .person .nm{grid-area:nm}.person .lo{grid-area:ld}
+  .person .h{display:none}
+}
+@media(max-width:860px){
+  .app{grid-template-columns:1fr}
+  aside{position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;overflow-x:auto;padding:10px 14px;gap:14px;border-right:none;border-bottom:1px solid var(--line)}
+  aside .brand,aside .catbox{display:none}
+  .nav{flex-direction:row}
+  .who{margin:0;border:none;padding:0;min-width:150px}
+  .who .eyebrow,.who .io{display:none}
+  .board{grid-template-columns:1fr}
+  .week{grid-template-columns:1fr 1fr}
+  .row,.row3{grid-template-columns:1fr}
+  .wrap{padding:16px 14px 60px}
+  .top{padding:12px 14px}
+}
+@media(prefers-reduced-motion:no-preference){.card,.btn,#toast{transition:.16s ease}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <aside>
+    <div class="brand"><span class="eyebrow">Trade Marketing</span><b>Central da Equipe</b></div>
+
+    <nav class="nav" id="nav" aria-label="Seções">
+      <button data-v="board" aria-current="page">Quadro<span class="badge" id="nb"></span></button>
+      <button data-v="minhas">Minhas tarefas<span class="badge" id="nm"></span></button>
+      <button data-v="lista">Lista completa</button>
+      <button data-v="painel">Coordenação<span class="badge" id="na"></span></button>
+    </nav>
+
+    <div class="catbox">
+      <span class="eyebrow">Categorias</span>
+      <div id="catLeg" style="display:flex;flex-direction:column;gap:7px;margin-top:10px"></div>
+    </div>
+
+    <div class="who">
+      <label class="eyebrow" for="me">Entrei como</label>
+      <select id="me" style="margin-top:7px"></select>
+      <div class="eu-card" id="euCard"></div>
+      <div class="io" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" id="ajuda">Como usar</button>
+        <button class="btn sm" id="tema">☀ / ☾ Tema</button>
+        <button class="btn sm" id="exp">Salvar cópia</button>
+        <button class="btn sm" id="imp">Abrir cópia</button>
+        <button class="btn sm" id="zerar">Recomeçar</button>
+      </div>
+      <div class="log" id="salvoInfo" style="margin-top:8px"></div>
+      <div class="log" style="margin-top:4px;opacity:.6">versão 2026-08-12 · tema+semana+repetição</div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <h1 id="title">Quadro</h1>
+      <div class="filters" id="filters">
+        <label class="sr" for="q">Buscar tarefa</label>
+        <input id="q" placeholder="Buscar tarefa…" style="width:180px">
+        <select id="fCat" aria-label="Categoria"><option value="">Todas categorias</option></select>
+        <select id="fResp" aria-label="Responsável"><option value="">Todo mundo</option></select>
+        <select id="fPri" aria-label="Prioridade"><option value="">Toda prioridade</option><option value="1">Crítica</option><option value="2">Alta</option><option value="3">Média</option><option value="4">Baixa</option></select>
+        <select id="fOri" aria-label="Origem"><option value="">Toda origem</option></select>
+        <label class="dtlab" style="font-size:11px;color:var(--mut)">Prazo de <input type="date" id="fDe" aria-label="Prazo de" style="margin-left:4px"></label>
+        <label class="dtlab" style="font-size:11px;color:var(--mut)">até <input type="date" id="fAte" aria-label="Prazo até" style="margin-left:4px"></label>
+        <select id="fGroup" aria-label="Agrupar por"><option value="status">Agrupar: Status</option><option value="semana">Agrupar: Semana</option><option value="resp">Agrupar: Responsável</option><option value="cat">Agrupar: Categoria</option><option value="pri">Agrupar: Prioridade</option></select>
+        <button class="btn sm" id="limpar">Limpar</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn sm" id="temaTop" title="Alternar tema" style="margin-right:8px;font-weight:600">🌙 Modo Escuro</button>
+      <button class="btn pri" id="newTask">+ Nova tarefa</button>
+    </div>
+    <div class="wrap" id="view"></div>
+  </main>
+</div>
+
+<div class="ov" id="ov" role="dialog" aria-modal="true" aria-labelledby="shTitle"><div class="sheet" id="sheet"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* =========================================================================
+   0. CONEXÃO COM O SUPABASE
+   Preencha as 2 linhas abaixo com os dados do SEU projeto:
+   Supabase → Project Settings → API → Project URL e a chave "anon public".
+   Enquanto ficarem em branco, o app roda em modo local (dados de exemplo
+   no navegador), pra você testar sem banco.
+   ========================================================================= */
+const SUPABASE_URL  = 'https://ndpadmxwmgkhpfdebups.supabase.co';   // ex.: https://xxxxxxxx.supabase.co
+const SUPABASE_ANON = 'sb_publishable_FNu-U24hlNZudsPNNucrbw_i3y8zpUK';   // ex.: eyJhbGciOi...  (chave anon public)
+const SCHEMA = 'equipe';
+
+let sb = null, ONLINE = false;
+try{
+  if(SUPABASE_URL && SUPABASE_ANON && window.supabase){
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { db:{ schema: SCHEMA } });
+    ONLINE = true;
+  }
+}catch(e){ ONLINE = false; }
+
+/* =========================================================================
+   1. DOMÍNIO
+   ========================================================================= */
+const uid   = () => 'x' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+const hoje  = () => new Date().toISOString().slice(0,10);
+const addDias = (iso,n) => { const d=new Date(iso+'T12:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+const dow   = iso => new Date(iso+'T12:00').getDay();
+const fmt   = iso => iso ? iso.slice(8,10)+'/'+iso.slice(5,7) : '—';
+const diffD = (a,b) => Math.round((new Date(b+'T12:00') - new Date(a+'T12:00'))/86400000);
+const dataOk = iso => /^\d{4}-\d{2}-\d{2}$/.test(iso||'') && !isNaN(new Date(iso+'T12:00'));
+
+const CATS = {
+  BI:     {nome:'B.I',     cor:'var(--bi)'},
+  ADM:    {nome:'ADM',     cor:'var(--adm)'},
+  CHAMADO:{nome:'Chamado', cor:'var(--cha)'},
+  GESTAO: {nome:'Gestão',  cor:'var(--ges)'}
+};
+const CAT_FB = {nome:'Sem categoria', cor:'var(--mut2)'};      // fallback: nunca quebra
+
+const ORIGENS = { projeto:'Projeto', chamado:'Chamado', melhoria:'Melhoria', rotina:'Rotina' };
+
+const STATUS = [
+  {k:'backlog',   n:'A fazer'},
+  {k:'andamento', n:'Em andamento'},
+  {k:'revisao',   n:'Em validação'},
+  {k:'concluido', n:'Concluída'}
+];
+const ST_FB = {k:'?', n:'Indefinido'};
+const stName = k => (STATUS.find(s=>s.k===k) || (k==='expirado'?{n:'Expirada'}:ST_FB)).n;
+
+const PRI = {1:{n:'Crítica',c:'var(--bad)',sla:0}, 2:{n:'Alta',c:'var(--warn)',sla:2}, 3:{n:'Média',c:'var(--bi)',sla:5}, 4:{n:'Baixa',c:'var(--mut2)',sla:10}};
+const PRI_FB = {n:'—', c:'var(--mut2)', sla:5};
+const DIAS = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+// rótulos coloridos, como as etiquetas do Planner
+const ROTULOS = {
+  rosa:'#F06595', vermelho:'#F03E3E', laranja:'#F76707', amarelo:'#F2C14E',
+  verde:'#37B24D', azul:'#3B9EFF', roxo:'#9775FA', ciano:'#22B8CF', cinza:'#868E96'
+};
+
+// tipos de repetição dentro da própria tarefa
+const REPETE = {
+  '':        'Não repete',
+  diaria:    'Todo dia',
+  uteis:     'Dias úteis (seg–sex)',
+  semanal:   'Toda semana',
+  mensal:    'Todo mês',
+  anual:     'Todo ano'
+};
+// calcula a data da PRÓXIMA ocorrência a partir de uma data base
+function proximaData(base, tipo){
+  if(!base || !tipo) return null;
+  let d = base;
+  switch(tipo){
+    case 'diaria':  return addDias(d,1);
+    case 'uteis':   { d=addDias(d,1); while(dow(d)===0||dow(d)===6) d=addDias(d,1); return d; }
+    case 'semanal': return addDias(d,7);
+    case 'mensal':  { const x=new Date(d+'T12:00'); x.setMonth(x.getMonth()+1); return x.toISOString().slice(0,10); }
+    case 'anual':   { const x=new Date(d+'T12:00'); x.setFullYear(x.getFullYear()+1); return x.toISOString().slice(0,10); }
+    default: return null;
+  }
+}
+
+const CFG = {
+  wip: 3,              // limite de tarefas simultâneas em "Em andamento" por pessoa
+  arquivarConcl: 14,   // dias que a tarefa concluída fica visível no quadro
+  estouroHoras: 1.25   // gasto/estimado acima disso é alerta
+};
+
+const cat  = k => CATS[k] || CAT_FB;
+const pri  = k => PRI[k]  || PRI_FB;
+const cor  = k => cat(k).cor;
+
+/* =========================================================================
+   2. ESTADO
+   ========================================================================= */
+const S = {
+  me:'u1', view:'board',
+  filtro:{q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''},
+  fpainel:{resp:'',de:'',ate:''},
+  ordem:{campo:'prazo',asc:true},
+  verConcluidas:false,
+  users:[
+    {id:'u1',nome:'Letícia',   ini:'LE',papel:'coordenacao',cargo:'Coordenadora',      cor:'#7C6FF0',capacidade:4},
+    {id:'u2',nome:'Francine',  ini:'FR',papel:'analista',   cargo:'Assistente de B.I',  cor:'#2DB8A3',capacidade:7},
+    {id:'u3',nome:'Gustavo',   ini:'GU',papel:'admin',      cargo:'Analista de B.I',    cor:'#3B9EFF',capacidade:8},
+    {id:'u4',nome:'Evellyn',   ini:'EV',papel:'analista',   cargo:'Auxiliar de ADM',    cor:'#F5934A',capacidade:8},
+    {id:'u5',nome:'Lucas Nadú',ini:'LN',papel:'analista',   cargo:'Assistente de ADM',  cor:'#E8637E',capacidade:7}
+  ],
+  tasks:[], rotinas:[]
+};
+const user = id => S.users.find(u=>u.id===id) || {id:'',nome:'Sem responsável',ini:'—',capacidade:0,papel:'analista',cor:'#4E606C'};
+// quem enxerga TUDO (quadro completo + aba Coordenação): coordenação ou admin
+const ehGestor = (id=S.me) => { const u=user(id); return u.papel==='coordenacao' || u.papel==='admin'; };
+// avatar com a cor da própria pessoa
+const avatar = (id, extra='') => {
+  const u = user(id), c = u.cor || '#4E606C';
+  return `<span class="av" title="${esc(u.nome)}" style="background:${c}22;color:${c};box-shadow:inset 0 0 0 1px ${c}66;${extra}">${esc(u.ini)}</span>`;
+};
+
+/* =========================================================================
+   2b. PERSISTÊNCIA — salva sozinho no navegador (funciona no arquivo baixado)
+   Quando plugar o Supabase, troque salvar()/carregar() pelas chamadas dele.
+   ========================================================================= */
+const CHAVE = 'central-equipe-v3';
+let temStorage = true;
+try { const k='__t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); }
+catch(e){ temStorage = false; }        // modo restrito / preview: cai pra memória
+
+function salvar(){
+  if(!temStorage || ONLINE) return;
+  try{
+    localStorage.setItem(CHAVE, JSON.stringify({
+      versao:3, users:S.users, tasks:S.tasks, rotinas:S.rotinas,
+      me:S.me, salvoEm:new Date().toISOString()
+    }));
+  }catch(e){ /* cota cheia: ignora, não trava o app */ }
+}
+function carregar(){
+  if(!temStorage) return false;
+  try{
+    const raw = localStorage.getItem(CHAVE); if(!raw) return false;
+    const d = JSON.parse(raw);
+    if(!Array.isArray(d.tasks) || !Array.isArray(d.users)) return false;
+    S.users   = d.users;
+    S.tasks   = d.tasks.map(t=>Object.assign({origem:'projeto',check:[],coment:[],hist:[],est:0,gasto:0},t));
+    S.rotinas = Array.isArray(d.rotinas)?d.rotinas:[];
+    if(d.me) S.me = d.me;
+    return true;
+  }catch(e){ return false; }
+}
+function limparTudo(){
+  if(temStorage){ try{ localStorage.removeItem(CHAVE); }catch(e){} }
+}
+
+/* ---------- dados de exemplo ---------- */
+(function seed(){
+  const h = hoje();
+  const t = o => Object.assign({
+    id:uid(), titulo:'', desc:'', cat:'BI', origem:'projeto', resp:'u1', solicitante:'', pri:3,
+    status:'backlog', criada:h, inicio:null, prazo:null, est:2, gasto:0, check:[], rotinaId:null,
+    rotulos:[], repete:'',
+    concluida:null, coment:[], hist:[]
+  }, o);
+
+  S.tasks = [
+    t({titulo:'Publicar dashboard de positivação — campanha Julho',cat:'BI',origem:'projeto',resp:'u3',pri:2,status:'andamento',prazo:addDias(h,2),est:6,gasto:3.5,
+       desc:'Cards de cobertura de ponto extra e material de PDV, com filtro por rede.',solicitante:'Comercial',
+       check:[{t:'Medidas de cobertura',d:true},{t:'Visual dos cards',d:true},{t:'Validar com o time comercial',d:false}]}),
+    t({titulo:'Chamado #4471 — promotor sem acesso ao app',cat:'CHAMADO',origem:'chamado',resp:'u5',pri:1,status:'andamento',prazo:addDias(h,-1),est:1,gasto:1.5,solicitante:'Supervisão SP'}),
+    t({titulo:'Revisar base de rotas divergentes da parceira',cat:'ADM',origem:'projeto',resp:'u4',pri:2,status:'revisao',prazo:addDias(h,1),est:4,gasto:4,criada:addDias(h,-9)}),
+    t({titulo:'Fechamento de headcount e turnover do mês',cat:'GESTAO',origem:'projeto',resp:'u1',pri:2,status:'backlog',prazo:addDias(h,4),est:5}),
+    t({titulo:'Preparar prévia de dados para o dashboard',cat:'BI',origem:'projeto',resp:'u2',pri:3,status:'backlog',prazo:addDias(h,3),est:4}),
+    t({titulo:'Refatorar consulta de eficácia (tempo de carga)',cat:'BI',origem:'melhoria',resp:'u3',pri:3,status:'andamento',prazo:addDias(h,5),est:4,gasto:1}),
+    t({titulo:'Conferir absenteísmo da semana anterior',cat:'ADM',origem:'projeto',resp:'u5',pri:3,status:'concluido',prazo:addDias(h,-3),est:3,gasto:2.5,concluida:addDias(h,-4)}),
+    t({titulo:'Chamado #4468 — divergência de estoque loja 1183',cat:'CHAMADO',origem:'chamado',resp:'u4',pri:2,status:'concluido',prazo:addDias(h,-2),est:2,gasto:3,concluida:addDias(h,-1)}),
+    t({titulo:'Apresentação de resultados para a diretoria',cat:'GESTAO',origem:'projeto',resp:'u1',pri:1,status:'backlog',prazo:addDias(h,3),est:4}),
+    t({titulo:'Corrigir medida de eficácia com loja duplicada',cat:'BI',origem:'chamado',resp:'u2',pri:1,status:'backlog',prazo:h,est:3}),
+    t({titulo:'Atualizar cadastro de promotores desligados',cat:'ADM',origem:'projeto',resp:'u4',pri:4,status:'concluido',prazo:addDias(h,-6),est:2,gasto:1.5,concluida:addDias(h,-7)}),
+    t({titulo:'Chamado #4472 — relatório não atualizou às 06h',cat:'CHAMADO',origem:'chamado',resp:'u3',pri:1,status:'concluido',prazo:addDias(h,-5),est:1,gasto:2,concluida:addDias(h,-3)}),
+    t({titulo:'Organizar planilha de controle de ponto extra',cat:'ADM',origem:'projeto',resp:'u5',pri:4,status:'concluido',prazo:addDias(h,-8),est:3,gasto:2,concluida:addDias(h,-8)}),
+    t({titulo:'Levantar pendências de cadastro de lojas novas',cat:'ADM',origem:'projeto',resp:'u4',pri:3,status:'concluido',prazo:addDias(h,-10),est:2,gasto:2,concluida:addDias(h,-11)})
+  ];
+
+  S.rotinas = [
+    {id:uid(),titulo:'Checar atualização das bases às 07h',cat:'BI',resp:'u3',pri:2,est:.5,freq:'uteis',dias:[],diaMes:1,prazoOffset:0,expiraDias:1,ativa:true,ultima:addDias(h,-1)},
+    {id:uid(),titulo:'Triagem de chamados abertos no dia',cat:'CHAMADO',resp:'u5',pri:2,est:1,freq:'diaria',dias:[],diaMes:1,prazoOffset:0,expiraDias:2,ativa:true,ultima:addDias(h,-1)},
+    {id:uid(),titulo:'Enviar prévia de eficácia para supervisão',cat:'GESTAO',resp:'u1',pri:3,est:1.5,freq:'semanal',dias:[3],diaMes:1,prazoOffset:0,expiraDias:3,ativa:true,ultima:addDias(h,-15)},
+    {id:uid(),titulo:'Fechar apontamento de horas do time',cat:'ADM',resp:'u4',pri:3,est:1,freq:'semanal',dias:[5],diaMes:1,prazoOffset:0,expiraDias:3,ativa:true,ultima:addDias(h,-15)},
+    {id:uid(),titulo:'Conciliar base interna x parceira',cat:'ADM',resp:'u5',pri:2,est:3,freq:'mensal',dias:[],diaMes:5,prazoOffset:2,expiraDias:0,ativa:true,ultima:null}
+  ];
+})();
+
+/* =========================================================================
+   3. MOTOR DE ROTINAS
+   ========================================================================= */
+function devePara(r, iso){
+  if(!r.ativa) return false;
+  const d = dow(iso);
+  switch(r.freq){
+    case 'diaria':  return true;
+    case 'uteis':   return d>=1 && d<=5;
+    case 'semanal': return Array.isArray(r.dias) && r.dias.includes(d);
+    case 'mensal':  return Number(iso.slice(8,10)) === Number(r.diaMes);
+    default:        return false;
+  }
+}
+// idempotente: rodar N vezes no mesmo dia não duplica nada
+function gerarRotinas(){
+  const h = hoje(); let criadas = 0;
+  S.rotinas.forEach(r => {
+    let d = r.ultima ? addDias(r.ultima,1) : h;
+    if(diffD(d,h) > 60) d = addDias(h,-60);        // teto de recuperação
+    for(; diffD(d,h) >= 0; d = addDias(d,1)){
+      if(!devePara(r,d)) continue;
+      if(S.tasks.some(t => t.rotinaId===r.id && t.criada===d)) continue;
+      S.tasks.push({
+        id:uid(), titulo:r.titulo, desc:'Tarefa gerada automaticamente pela rotina.',
+        cat:r.cat, origem:'rotina', resp:r.resp, solicitante:'Rotina', pri:r.pri,
+        status:'backlog', criada:d, prazo:addDias(d, r.prazoOffset||0), est:r.est, gasto:0,
+        check:[], rotinaId:r.id, concluida:null, coment:[], hist:[]
+      });
+      criadas++;
+    }
+    if(r.ativa) r.ultima = h;
+  });
+  return criadas;
+}
+// rotina vencida não fica entulhando o quadro: vira "expirada" e conta como perda
+function expirarRotinas(){
+  const h = hoje(); let n = 0;
+  S.tasks.forEach(t => {
+    if(!t.rotinaId || t.status!=='backlog') return;
+    const r = S.rotinas.find(x=>x.id===t.rotinaId);
+    if(!r || !r.expiraDias) return;
+    if(diffD(t.criada,h) > r.expiraDias){ t.status='expirado'; n++; }
+  });
+  return n;
+}
+
+/* =========================================================================
+   4. HELPERS DE UI
+   ========================================================================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ativa = t => t.status!=='concluido' && t.status!=='expirado';
+const isAtrasada = t => ativa(t) && t.prazo && diffD(hoje(), t.prazo) < 0;
+const noPrazo = t => t.status==='concluido' && (!t.prazo || (t.concluida && t.concluida <= t.prazo));
+const inicioSemana = () => { const h=hoje(); return addDias(h, -((dow(h)+6)%7)); };
+const fimSemana    = () => addDias(inicioSemana(), 6);
+
+let toastT;
+function toast(msg, bad, acao){
+  const el = $('#toast');
+  el.innerHTML = `<span>${esc(msg)}</span>`;
+  if(acao){
+    const b = document.createElement('button');
+    b.textContent = 'Desfazer';
+    b.style.cssText = 'margin-left:12px;color:var(--ok);font-weight:700;background:none;border:none;cursor:pointer';
+    b.onclick = () => { el.classList.remove('on'); acao(); };
+    el.appendChild(b);
+  }
+  el.classList.toggle('bad', !!bad); el.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('on'), acao?6000:3200);
+}
+
+function filtra(list){
+  const f = S.filtro, q = f.q.trim().toLowerCase();
+  return list.filter(t =>
+    (!q      || (t.titulo+' '+t.desc+' '+(t.solicitante||'')).toLowerCase().includes(q)) &&
+    (!f.cat  || t.cat===f.cat) &&
+    (!f.resp || t.resp===f.resp) &&
+    (!f.pri  || String(t.pri)===f.pri) &&
+    (!f.ori  || t.origem===f.ori) &&
+    (!f.de   || (t.prazo && t.prazo>=f.de)) &&
+    (!f.ate  || (t.prazo && t.prazo<=f.ate))
+  );
+}
+
+// comparador correto (o antigo quebrava por precedência de operador)
+function ordenaPadrao(a,b){
+  if(a.pri !== b.pri) return a.pri - b.pri;                     // crítica primeiro
+  const pa = a.prazo || '9999-12-31', pb = b.prazo || '9999-12-31';
+  if(pa !== pb) return pa < pb ? -1 : 1;                        // prazo mais próximo
+  return a.titulo.localeCompare(b.titulo, 'pt-BR');             // desempate estável
+}
+
+function cardHTML(t){
+  const u = user(t.resp), c = cor(t.cat), P = pri(t.pri);
+  const dd  = t.prazo ? diffD(hoje(), t.prazo) : null;
+  const cls = !ativa(t) || dd===null ? '' : dd<0 ? 'late' : dd<=1 ? 'soon' : '';
+  const prog = t.check.length ? Math.round(100*t.check.filter(x=>x.d).length/t.check.length) : null;
+  const aria = `${t.titulo}. ${cat(t.cat).nome}, prioridade ${P.n}, responsável ${u.nome}${t.prazo?', prazo '+fmt(t.prazo):''}. Abrir detalhes.`;
+  const si = STATUS.findIndex(s=>s.k===t.status);
+  const ant = si>0 ? STATUS[si-1] : null;
+  const prox= si<STATUS.length-1 ? STATUS[si+1] : null;
+  return `<div class="card" draggable="true" data-id="${t.id}" role="button" tabindex="0" style="border-left-color:${c}" aria-label="${esc(aria)}">
+    <button type="button" class="conc ${t.status==='concluido'?'on':''}" data-conc="${t.id}" title="${t.status==='concluido'?'Reabrir':'Marcar como concluída'}" aria-label="${t.status==='concluido'?'Reabrir tarefa':'Concluir tarefa'}">✓</button>
+    ${(t.rotulos&&t.rotulos.length)?`<span class="rots">${t.rotulos.map(r=>`<span class="rotulo" style="background:${ROTULOS[r]||r}" title="${r}"></span>`).join('')}</span>`:''}
+    <span class="t" style="padding-right:22px">${esc(t.titulo)}</span>
+    ${prog!==null?`<span class="bar"><i style="width:${prog}%"></i></span>`:''}
+    <span class="meta">
+      <span class="p" style="background:${P.c}" title="Prioridade ${P.n}"></span>
+      <span class="tag" style="color:${c}">${cat(t.cat).nome}</span>
+      ${t.prazo?`<span class="due ${cls}">${cls==='late'?'⚠ ':''}${fmt(t.prazo)}</span>`:'<span class="due" style="color:var(--warn)">sem prazo</span>'}
+      ${t.check.length?`<span class="rot" style="color:var(--mut)">☑ ${t.check.filter(x=>x.d).length}/${t.check.length}</span>`:''}
+      ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}
+      ${avatar(t.resp,'margin-left:auto')}
+    </span>
+    <span class="move">
+      <button type="button" data-mv="ant" ${ant?'':'disabled'} title="${ant?'Voltar para '+ant.n:'Já está no início'}">‹ ${ant?ant.n:''}</button>
+      <button type="button" class="next" data-mv="prox" ${prox?'':'disabled'} title="${prox?'Avançar para '+prox.n:'Já concluída'}">${prox?prox.n:'Concluída'} ›</button>
+    </span>
+  </div>`;
+}
+
+function linhaTask(t, extra){
+  const dd = t.prazo ? diffD(hoje(), t.prazo) : null;
+  return `<div class="line clic" data-id="${t.id}" role="button" tabindex="0">
+    <span class="p" style="background:${pri(t.pri).c}"></span>
+    <span class="tag" style="color:${cor(t.cat)}">${cat(t.cat).nome}</span>
+    <span style="flex:1;min-width:0">${esc(t.titulo)}</span>
+    ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}
+    ${extra?`<span style="color:var(--bad);font-size:11px">${esc(extra)}</span>`:''}
+    <span class="due ${!ativa(t)||dd===null?'':dd<0?'late':dd<=1?'soon':''}">${fmt(t.prazo)}</span>
+    ${avatar(t.resp)}</div>`;
+}
+
+/* =========================================================================
+   5. VIEWS
+   ========================================================================= */
+function kpisQuadro(base){
+  const total = base.length;
+  const afazer = base.filter(t=>t.status==='backlog').length;
+  const andam  = base.filter(t=>t.status==='andamento').length;
+  const valid  = base.filter(t=>t.status==='revisao').length;
+  const conc   = base.filter(t=>t.status==='concluido').length;
+  const atras  = base.filter(isAtrasada).length;
+  const abertas= afazer+andam+valid;
+  const pctConc= total? Math.round(100*conc/total) : 0;
+  const box=(l,v,c,s)=>`<div class="kpi" style="padding:11px 13px"><span class="eyebrow">${l}</span><div class="v" style="font-size:22px;color:${c||'var(--tx)'}">${v}</div>${s?`<div class="sub">${s}</div>`:''}</div>`;
+  return `<div class="grid kpis" style="margin-bottom:14px">
+    ${box('Total', total, 'var(--tx)', `${abertas} em aberto`)}
+    ${box('A fazer', afazer)}
+    ${box('Em andamento', andam)}
+    ${box('Em validação', valid)}
+    ${box('Concluídas', conc, 'var(--ok)', `${pctConc}% do total`)}
+    ${box('Atrasadas', atras, atras?'var(--bad)':'var(--mut)')}
+  </div>`;
+}
+
+function vBoard(){
+  let base = filtra(S.tasks).filter(t=>t.status!=='expirado');
+  if(!ehGestor()) base = base.filter(t=>t.resp===S.me);   // cada um vê só o que é seu
+  const grupo = S.grupo || 'status';
+  const kpis = kpisQuadro(base);
+
+  // agrupamento por status = kanban clássico com drag
+  if(grupo==='status'){
+    const wipPorPessoa = {};
+    base.filter(t=>t.status==='andamento').forEach(t=>wipPorPessoa[t.resp]=(wipPorPessoa[t.resp]||0)+1);
+    const estourouWip = Object.entries(wipPorPessoa).filter(([,n])=>n>CFG.wip);
+    $('#view').innerHTML = kpis + `
+    ${estourouWip.length?`<div class="panel" style="border-left:3px solid var(--warn);margin-bottom:14px;padding:12px 16px">
+      <b style="font-size:13px">Muita coisa aberta ao mesmo tempo</b>
+      <div class="hint" style="margin:4px 0 0">${estourouWip.map(([id,n])=>`${esc(user(id).nome)} com ${n} tarefas em andamento`).join(' · ')}. O limite combinado é ${CFG.wip}. Terminar rende mais que começar.</div>
+    </div>`:''}
+    <div class="board">${STATUS.map(s=>{
+      let list = base.filter(t=>t.status===s.k);
+      let nota = '';
+      if(s.k==='concluido'){
+        const total = list.length;
+        list = list.filter(t=>!t.concluida || diffD(t.concluida,hoje())<=CFG.arquivarConcl);
+        if(total>list.length) nota = `<div class="hint" style="margin:8px 2px 0">+${total-list.length} concluídas há mais de ${CFG.arquivarConcl} dias (veja em Lista completa).</div>`;
+      }
+      list.sort(ordenaPadrao);
+      const over = s.k==='andamento' && estourouWip.length;
+      return `<section class="col" data-st="${s.k}" aria-label="${s.n}">
+        <header><b>${s.n}</b><span class="n ${over?'over':''}">${list.length}</span></header>
+        <div class="body">${list.map(cardHTML).join('') || '<div class="empty">Nada aqui.</div>'}${nota}</div>
+      </section>`;
+    }).join('')}</div>
+    <p class="hint" style="margin-top:14px">Arraste os cards ou, com o card focado, use <b>← →</b> para mudar de coluna e <b>Enter</b> para abrir. O botão ✓ conclui na hora.</p>`;
+    ligarBoard();
+    return;
+  }
+
+  // agrupamento por responsável / categoria / prioridade (colunas por grupo, sem drag)
+  let grupos;
+  if(grupo==='resp')     grupos = S.users.map(u=>({k:u.id, nome:u.nome, filtro:t=>t.resp===u.id}));
+  else if(grupo==='cat') grupos = Object.entries(CATS).map(([k,c])=>({k, nome:c.nome, filtro:t=>t.cat===k}));
+  else if(grupo==='semana'){
+    const ini=inicioSemana(), fimP=addDias(ini,6), fimProx=addDias(ini,13);
+    grupos = [
+      {k:'atr',   nome:'Atrasadas',      filtro:t=>t.prazo && t.prazo<ini},
+      {k:'esta',  nome:'Esta semana',    filtro:t=>t.prazo && t.prazo>=ini && t.prazo<=fimP},
+      {k:'prox',  nome:'Próxima semana', filtro:t=>t.prazo && t.prazo>fimP && t.prazo<=fimProx},
+      {k:'dep',   nome:'Depois',         filtro:t=>t.prazo && t.prazo>fimProx},
+      {k:'semp',  nome:'Sem prazo',      filtro:t=>!t.prazo}
+    ];
+  }
+  else                   grupos = Object.entries(PRI).map(([k,p])=>({k, nome:p.n, filtro:t=>String(t.pri)===String(k)}));
+
+  $('#view').innerHTML = kpis + `
+  <p class="hint" style="margin:0 0 12px">Agrupado por ${grupo==='resp'?'responsável':grupo==='cat'?'categoria':grupo==='semana'?'semana (pelo prazo)':'prioridade'}. Clique no card para abrir e mudar. (Arrastar só funciona no agrupamento por status.)</p>
+  <div class="board">${grupos.map(g=>{
+    const list = base.filter(t=>ativa(t) && g.filtro(t)).sort(ordenaPadrao);
+    return `<section class="col" aria-label="${esc(g.nome)}">
+      <header><b>${esc(g.nome)}</b><span class="n">${list.length}</span></header>
+      <div class="body">${list.map(cardHTML).join('') || '<div class="empty">Nada aqui.</div>'}</div>
+    </section>`;
+  }).join('')}</div>`;
+  ligarBoardLeve();
+}
+
+// versão sem drag: só clique e botões
+function ligarBoardLeve(){
+  $('#view').querySelectorAll('.card').forEach(c=>{
+    c.querySelectorAll('[data-mv]').forEach(b=>b.addEventListener('click', e => {
+      e.stopPropagation();
+      const st = S.tasks.find(t=>t.id===c.dataset.id); if(!st) return;
+      const i = STATUS.findIndex(s=>s.k===st.status);
+      const alvo = b.dataset.mv==='prox' ? STATUS[i+1] : STATUS[i-1];
+      if(alvo) mover(c.dataset.id, alvo.k);
+    }));
+    const bc = c.querySelector('[data-conc]');
+    if(bc) bc.addEventListener('click', e => { e.stopPropagation();
+      const st = S.tasks.find(t=>t.id===c.dataset.id); if(!st) return;
+      mover(c.dataset.id, st.status==='concluido'?'backlog':'concluido'); });
+    c.addEventListener('click', e => { if(!e.target.closest('[data-mv],[data-conc]')) abrirTask(c.dataset.id); });
+    c.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); abrirTask(c.dataset.id); } });
+  });
+}
+
+function vMinhas(){
+  const meus  = filtra(S.tasks).filter(t=>t.resp===S.me && ativa(t)).sort(ordenaPadrao);
+  const atras = meus.filter(isAtrasada);
+  const semana= meus.filter(t=>t.prazo && t.prazo>=inicioSemana() && t.prazo<=fimSemana());
+  const hs = meus.reduce((s,t)=>s+(+t.est||0),0);
+  $('#view').innerHTML = `
+    <div class="grid kpis" style="margin-bottom:14px">
+      ${kpi('Abertas', meus.length, `${meus.length} no total`)}
+      ${kpi('Vencem nesta semana', semana.length, 'com prazo nesta semana')}
+      ${kpi('Atrasadas', atras.length, atras.length?'Replaneje ou entregue hoje':'Tudo dentro do prazo', atras.length?'var(--bad)':'var(--ok)')}
+    </div>
+    ${atras.length?`<div class="panel" style="border-left:3px solid var(--bad);margin-bottom:14px">
+      <h3>Passaram do prazo</h3><div class="hint">Reveja o prazo na tarefa ou entregue. Deixar vencido distorce o painel da coordenação.</div>
+      ${atras.map(t=>linhaTask(t, `${-diffD(hoje(),t.prazo)}d atrasada`)).join('')}</div>`:''}
+    <div class="panel"><h3>Fila de trabalho</h3><div class="hint">Ordenada por prioridade e depois por prazo.</div>
+      ${meus.length?meus.map(t=>linhaTask(t)).join(''):'<div class="empty">Sem tarefas abertas para você.</div>'}</div>`;
+  ligarLinhas();
+}
+
+function vLista(){
+  let ts = filtra(S.tasks);
+  if(!ehGestor()) ts = ts.filter(t=>t.resp===S.me);
+  if(!S.verConcluidas) ts = ts.filter(ativa);
+  const o = S.ordem, dir = o.asc?1:-1;
+  ts.sort((a,b)=>{
+    const g = t => o.campo==='prazo' ? (t.prazo||'9999-12-31')
+              : o.campo==='resp'  ? user(t.resp).nome
+              : o.campo==='cat'   ? cat(t.cat).nome
+              : o.campo==='pri'   ? String(t.pri)
+              : o.campo==='status'? stName(t.status)
+              : t.titulo;
+    const A=g(a), B=g(b);
+    return A===B ? ordenaPadrao(a,b) : (A<B?-1:1)*dir;
+  });
+  const th = (k,l) => `<th data-sort="${k}" title="Ordenar">${l}${o.campo===k?(o.asc?' ▲':' ▼'):''}</th>`;
+  $('#view').innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+      <label class="chip ${S.verConcluidas?'on':''}" style="cursor:pointer">
+        <input type="checkbox" id="vc" ${S.verConcluidas?'checked':''} style="accent-color:var(--ok)"> Mostrar concluídas e expiradas</label>
+      <span class="hint" style="margin:0">${ts.length} tarefa(s)</span>
+    </div>
+    <div class="panel" style="padding:6px 16px 16px;overflow:auto">
+    <table><thead><tr>
+      ${th('titulo','Tarefa')}${th('cat','Categoria')}<th>Origem</th>${th('resp','Responsável')}${th('pri','Prioridade')}${th('status','Status')}${th('prazo','Prazo')}
+    </tr></thead><tbody>${ts.map(t=>`<tr data-id="${t.id}" tabindex="0">
+      <td>${esc(t.titulo)} ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}</td>
+      <td><span class="tag" style="color:${cor(t.cat)}">${cat(t.cat).nome}</span></td>
+      <td style="color:var(--mut)">${esc(ORIGENS[t.origem]||'—')}</td>
+      <td>${avatar(t.resp,'display:inline-grid;vertical-align:middle')} ${esc(user(t.resp).nome)}</td>
+      <td><span class="p" style="background:${pri(t.pri).c};vertical-align:middle"></span> ${pri(t.pri).n}</td>
+      <td style="${t.status==='expirado'?'color:var(--mut2)':''}">${stName(t.status)}</td>
+      <td class="due ${isAtrasada(t)?'late':''}">${fmt(t.prazo)}</td>
+      </tr>`).join('')}</tbody></table>
+    ${ts.length?'':'<div class="empty">Nenhuma tarefa com esses filtros.</div>'}</div>`;
+  $('#vc').onchange = e => { S.verConcluidas = e.target.checked; render(); };
+  $('#view').querySelectorAll('th[data-sort]').forEach(h=>h.onclick=()=>{
+    const k=h.dataset.sort; S.ordem = {campo:k, asc: S.ordem.campo===k ? !S.ordem.asc : true}; render();
+  });
+  $('#view').querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.onclick = () => abrirTask(tr.dataset.id);
+    tr.onkeydown = e => { if(e.key==='Enter'){e.preventDefault();abrirTask(tr.dataset.id);} };
+  });
+}
+
+const descRot = r =>
+  r.freq==='diaria'  ? 'Todo dia' :
+  r.freq==='uteis'   ? 'Dias úteis (seg a sex)' :
+  r.freq==='semanal' ? 'Toda ' + (r.dias||[]).slice().sort().map(d=>DIAS[d]).join(', ') :
+  r.freq==='mensal'  ? 'Todo dia ' + r.diaMes + ' do mês' : '—';
+
+function vRotinas(){
+  $('#view').innerHTML = `<div class="panel" style="overflow:auto">
+    <h3>Rotinas cadastradas</h3>
+    <div class="hint">A rotina é o molde, não a tarefa. Na data programada ela cria uma tarefa nova no quadro.
+    Aderência = quantas das tarefas geradas nos últimos 30 dias foram concluídas. Aderência baixa quer dizer que a rotina não cabe na semana de quem recebeu, ou que ela não deveria existir.</div>
+    <table><thead><tr><th>Rotina</th><th>Frequência</th><th>Categoria</th><th>Responsável</th><th>Est.</th><th>Expira</th><th>Aderência 30d</th><th>Situação</th></tr></thead>
+    <tbody>${S.rotinas.map(r=>{
+      const ger = S.tasks.filter(t=>t.rotinaId===r.id && diffD(t.criada,hoje())<=30);
+      const ok  = ger.filter(t=>t.status==='concluido').length;
+      const exp = ger.filter(t=>t.status==='expirado').length;
+      const ad  = ger.length?Math.round(100*ok/ger.length):null;
+      return `<tr data-rot="${r.id}" tabindex="0">
+        <td>${esc(r.titulo)}</td><td>${descRot(r)}</td>
+        <td><span class="tag" style="color:${cor(r.cat)}">${cat(r.cat).nome}</span></td>
+        <td>${esc(user(r.resp).nome)}</td><td class="mono">${r.est}h</td>
+        <td class="mono" style="color:var(--mut)">${r.expiraDias?r.expiraDias+'d':'nunca'}</td>
+        <td class="mono" style="color:${ad===null?'var(--mut)':ad>=80?'var(--ok)':ad>=50?'var(--warn)':'var(--bad)'}">
+          ${ad===null?'—':ad+'%'} <span style="color:var(--mut)">(${ok}/${ger.length}${exp?`, ${exp} expirada${exp>1?'s':''}`:''})</span></td>
+        <td>${r.ativa?'<span style="color:var(--ok)">ativa</span>':'<span style="color:var(--mut)">pausada</span>'}</td></tr>`;
+    }).join('')}</tbody></table>
+    ${S.rotinas.length?'':'<div class="empty">Nenhuma rotina cadastrada.</div>'}</div>`;
+  $('#view').querySelectorAll('tr[data-rot]').forEach(tr=>{
+    tr.onclick = () => abrirRotina(tr.dataset.rot);
+    tr.onkeydown = e => { if(e.key==='Enter'){e.preventDefault();abrirRotina(tr.dataset.rot);} };
+  });
+}
+
+/* ---------- PAINEL DA COORDENAÇÃO ---------- */
+function vPainel(){
+  const h=hoje(), ini=inicioSemana(), fim=fimSemana();
+  const fp = S.fpainel;
+  // filtra a base do painel por pessoa e por período (prazo)
+  const dentro = t => (!fp.resp || t.resp===fp.resp)
+                   && (!fp.de   || (t.prazo && t.prazo>=fp.de))
+                   && (!fp.ate  || (t.prazo && t.prazo<=fp.ate));
+  const TASKS = S.tasks.filter(dentro);
+  const filtrando = fp.resp || fp.de || fp.ate;
+
+  const abertas   = TASKS.filter(ativa);
+  const atrasadas = abertas.filter(isAtrasada);
+  const semana    = abertas.filter(t=>t.prazo && t.prazo>=ini && t.prazo<=fim);
+  const conc30    = TASKS.filter(t=>t.status==='concluido' && t.concluida && diffD(t.concluida,h)<=30 && diffD(t.concluida,h)>=0);
+  const np        = conc30.filter(noPrazo);
+  const sla       = conc30.length?Math.round(100*np.length/conc30.length):null;
+  const expiradas = TASKS.filter(t=>t.status==='expirado' && diffD(t.criada,h)<=30);
+
+  const pessoasBase = fp.resp ? S.users.filter(u=>u.id===fp.resp) : S.users;
+  const pessoas = pessoasBase.map(u=>{
+    const ab = abertas.filter(t=>t.resp===u.id);
+    const cc = conc30.filter(t=>t.resp===u.id);
+    const okc= cc.filter(noPrazo).length;
+    const sem= semana.filter(t=>t.resp===u.id);
+    return {u, ab:ab.length, at:ab.filter(isAtrasada).length, cc:cc.length,
+      sla: cc.length?Math.round(100*okc/cc.length):null, semN:sem.length, wip:ab.filter(t=>t.status==='andamento').length,
+      porCatN: Object.keys(CATS).map(k=>({k, n:sem.filter(t=>t.cat===k).length}))};
+  }).sort((a,b)=> b.at-a.at || b.semN-a.semN);
+
+  const dias = Array.from({length:7},(_,i)=>addDias(ini,i));
+  const entregasDia = Array.from({length:14},(_,i)=>{
+    const d = addDias(h,-13+i);
+    return {d, n:TASKS.filter(t=>t.concluida===d).length};
+  });
+  const maxE = Math.max(1, ...entregasDia.map(x=>x.n));
+
+  const riscos = [
+    ...atrasadas.map(t=>({t,m:`atrasada há ${-diffD(h,t.prazo)}d`})),
+    ...abertas.filter(t=>!t.prazo).map(t=>({t,m:'sem prazo'})),
+    ...abertas.filter(t=>!t.resp || !S.users.some(u=>u.id===t.resp)).map(t=>({t,m:'sem responsável'})),
+    ...abertas.filter(t=>t.status==='revisao' && diffD(t.criada,h)>5).map(t=>({t,m:`${diffD(t.criada,h)}d em validação`})),
+  ].filter((v,i,a)=>a.findIndex(x=>x.t.id===v.t.id)===i);
+
+  $('#view').innerHTML = `
+  <div class="panel" style="padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span class="eyebrow">Filtrar painel</span>
+    <select id="pResp" style="background:var(--panel2);border:1px solid var(--line);padding:7px 10px;border-radius:8px">
+      <option value="">Toda a equipe</option>
+      ${S.users.map(u=>`<option value="${u.id}" ${fp.resp===u.id?'selected':''}>${esc(u.nome)}</option>`).join('')}
+    </select>
+    <label style="font-size:11px;color:var(--mut)">de <input type="date" id="pDe" value="${fp.de}" style="margin-left:4px;background:var(--panel2);border:1px solid var(--line);padding:6px 8px;border-radius:8px"></label>
+    <label style="font-size:11px;color:var(--mut)">até <input type="date" id="pAte" value="${fp.ate}" style="margin-left:4px;background:var(--panel2);border:1px solid var(--line);padding:6px 8px;border-radius:8px"></label>
+    ${filtrando?`<button class="btn sm" id="pLimpar">Limpar</button><span class="hint" style="margin:0;color:var(--eu)">filtrando${fp.resp?' · '+esc(user(fp.resp).nome):''}${(fp.de||fp.ate)?' · período':''}</span>`:''}
+  </div>
+  <div class="grid kpis" style="margin-bottom:16px">
+    ${kpi('Abertas agora', abertas.length, `${semana.length} vencem nesta semana`)}
+    ${kpi('Atrasadas', atrasadas.length, atrasadas.length?'Exige decisão hoje':'Nenhuma vencida', atrasadas.length?'var(--bad)':'var(--ok)')}
+    ${kpi('Entregues em 30 dias', conc30.length, `${np.length} dentro do prazo`)}
+    ${kpi('Cumprimento de prazo', sla===null?'—':sla+'%', 'Média de 30 dias', sla===null?'var(--mut)':sla>=85?'var(--ok)':sla>=65?'var(--warn)':'var(--bad)')}
+    ${kpi('Rotinas perdidas', expiradas.length, 'Expiraram sem execução em 30d', expiradas.length?'var(--warn)':'var(--ok)')}
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <h3>Semana de ${fmt(ini)} a ${fmt(fim)}</h3>
+    <div class="hint">O que precisa ser encerrado até domingo, pelo dia de vencimento. Clique para abrir a tarefa.</div>
+    <div class="week">${dias.map(d=>{
+      const its = semana.filter(t=>t.prazo===d).sort(ordenaPadrao);
+      const hs = its.length;
+      return `<div class="day ${d===h?'today':''} ${d<h?'past':''}">
+        <div class="d"><span>${DIAS[dow(d)]} ${fmt(d)}</span><span>${hs?hs:''}</span></div>
+        ${its.map(t=>`<button type="button" class="it" data-id="${t.id}" style="border-left-color:${cor(t.cat)};${d<h?'color:var(--bad)':''}">
+          ${esc(t.titulo.length>44?t.titulo.slice(0,44)+'…':t.titulo)}<br>
+          <span style="color:var(--mut);font-size:10px">${esc(user(t.resp).nome)} · ${t.est}h</span></button>`).join('')
+          || '<span style="color:var(--mut2);font-size:11px">—</span>'}
+      </div>`;
+    }).join('')}</div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <h3>Desempenho por pessoa</h3>
+    <div class="hint">Distribuição de tarefas da semana por categoria, com os números de aberto, atrasado, entregue e cumprimento de prazo. Ordenado por quem tem mais atraso.</div>
+    <div class="person h" style="color:var(--mut);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase">
+      <span>Pessoa</span><span>Tarefas da semana</span><span class="num">Abertas</span><span class="num">Atrasadas</span><span class="num">Entregues</span><span class="num">Prazo</span></div>
+    ${pessoas.map(p=>{
+      const base = Math.max(p.semN, 1);
+      return `<div class="person">
+        <span class="nm">${avatar(p.u.id)}<span>${esc(p.u.nome)}</span></span>
+        <span class="lo">
+          <span class="load">${p.porCatN.filter(c=>c.n>0).map(c=>`<i style="width:${100*c.n/base}%;background:${cor(c.k)}"></i>`).join('')||'<i style="width:0"></i>'}</span>
+          <span class="mono" style="font-size:10.5px;color:var(--mut)">${p.semN} tarefa(s) nesta semana${p.wip?` · ${p.wip} em andamento`:''}</span>
+        </span>
+        <span class="num">${p.ab}</span>
+        <span class="num" style="color:${p.at?'var(--bad)':'var(--mut)'}">${p.at}</span>
+        <span class="num">${p.cc}</span>
+        <span class="num" style="color:${p.sla===null?'var(--mut)':p.sla>=85?'var(--ok)':p.sla>=65?'var(--warn)':'var(--bad)'}">${p.sla===null?'—':p.sla+'%'}</span>
+      </div>`;
+    }).join('')}
+    <div class="legend">${Object.entries(CATS).map(([k,c])=>`<span style="color:${c.cor}"><span class="dot"></span> ${c.nome}</span>`).join('')}</div>
+  </div>
+
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+    <div class="panel"><h3>Riscos abertos</h3><div class="hint">O que a coordenação precisa destravar.</div>
+      ${riscos.length?riscos.map(i=>linhaTask(i.t, i.m)).join(''):'<div class="empty">Nada travado.</div>'}</div>
+
+    <div class="panel"><h3>Distribuição por categoria</h3><div class="hint">Tarefas abertas e horas estimadas.</div>
+      ${Object.entries(CATS).map(([k,c])=>{
+        const l = abertas.filter(t=>t.cat===k);
+        return `<div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+            <span style="color:${c.cor}">${c.nome}</span><span class="mono" style="color:var(--mut)">${l.length} tarefas</span></div>
+          <div class="load"><i style="width:${abertas.length?100*l.length/abertas.length:0}%;background:${c.cor}"></i></div></div>`;
+      }).join('')}
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+        <div class="eyebrow">Reativo x planejado</div>
+        <div class="hint" style="margin:6px 0 0">
+          ${['chamado','projeto','melhoria','rotina'].map(o=>{
+            const n = abertas.filter(t=>t.origem===o).length;
+            return `${ORIGENS[o]}: <b style="color:var(--tx)">${abertas.length?Math.round(100*n/abertas.length):0}%</b>`;
+          }).join(' · ')}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel"><h3>Entregas por dia</h3><div class="hint">Últimos 14 dias. Serve pra ver se o time entrega no fluxo ou só na sexta.</div>
+      <div class="spark">${entregasDia.map(x=>`<div class="${x.n?'':'zero'}" style="height:${x.n?Math.max(6,100*x.n/maxE):4}%" title="${fmt(x.d)}: ${x.n} entrega(s)"></div>`).join('')}</div>
+      <div class="sparkx">${entregasDia.map((x,i)=>`<span>${i%3===0?fmt(x.d).slice(0,2):''}</span>`).join('')}</div>
+      <div class="hint" style="margin-top:10px">Total no período: ${entregasDia.reduce((s,x)=>s+x.n,0)} · pico de ${maxE} num dia.</div>
+    </div>
+  </div>`;
+  ligarLinhas();
+  const pr=$('#pResp'), pd=$('#pDe'), pa=$('#pAte'), pl=$('#pLimpar');
+  if(pr) pr.onchange = e => { S.fpainel.resp = e.target.value; render(); };
+  if(pd) pd.onchange = e => { S.fpainel.de   = e.target.value; render(); };
+  if(pa) pa.onchange = e => { S.fpainel.ate  = e.target.value; render(); };
+  if(pl) pl.onclick  = () => { S.fpainel = {resp:'',de:'',ate:''}; render(); };
+}
+const kpi = (l,v,s,c) => `<div class="kpi"><span class="eyebrow">${l}</span><div class="v" style="color:${c||'var(--tx)'}">${v}</div><div class="sub">${s}</div></div>`;
+
+/* =========================================================================
+   6. MODAIS
+   ========================================================================= */
+const ov = $('#ov'), sheet = $('#sheet');
+let ultimoFoco = null;
+function fechar(){ ov.classList.remove('on'); sheet.innerHTML=''; if(ultimoFoco && document.contains(ultimoFoco)) ultimoFoco.focus(); }
+function abrir(){ ov.classList.add('on'); const f = sheet.querySelector('input,select,textarea,button'); if(f) f.focus(); }
+ov.addEventListener('mousedown', e => { if(e.target===ov) fechar(); });
+document.addEventListener('keydown', e => {
+  if(!ov.classList.contains('on')) return;
+  if(e.key==='Escape'){ fechar(); return; }
+  if(e.key==='Tab'){                                   // trava o foco dentro do modal
+    const f = [...sheet.querySelectorAll('input,select,textarea,button,[tabindex="0"]')].filter(x=>x.offsetParent!==null);
+    if(!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if(e.shiftKey && i<=0){ e.preventDefault(); f[f.length-1].focus(); }
+    else if(!e.shiftKey && i===f.length-1){ e.preventDefault(); f[0].focus(); }
+  }
+});
+
+const optU = sel => S.users.map(u=>`<option value="${u.id}" ${u.id===sel?'selected':''}>${esc(u.nome)}</option>`).join('');
+const optC = sel => Object.entries(CATS).map(([k,c])=>`<option value="${k}" ${k===sel?'selected':''}>${c.nome}</option>`).join('');
+const optO = sel => Object.entries(ORIGENS).map(([k,n])=>`<option value="${k}" ${k===sel?'selected':''}>${n}</option>`).join('');
+const optP = sel => Object.entries(PRI).map(([k,p])=>`<option value="${k}" ${String(k)===String(sel)?'selected':''}>${p.n} (prazo sugerido ${p.sla===0?'hoje':p.sla+'d'})</option>`).join('');
+const optS = sel => STATUS.map(s=>`<option value="${s.k}" ${s.k===sel?'selected':''}>${s.n}</option>`).join('');
+
+function abrirTask(id){
+  ultimoFoco = document.activeElement;
+  const orig = id ? S.tasks.find(x=>x.id===id) : null;
+  if(id && !orig){ toast('Tarefa não encontrada.', true); return; }
+  const novo = !orig;
+  const t = orig || {titulo:'',desc:'',cat:'BI',origem:'projeto',resp:S.me,solicitante:'',pri:3,
+    status:'backlog',criada:hoje(),inicio:hoje(),prazo:addDias(hoje(),pri(3).sla),est:2,gasto:0,check:[],rotinaId:null,rotulos:[],concluida:null,coment:[],hist:[]};
+
+  const chk = JSON.parse(JSON.stringify(t.check||[]));
+  const rot = t.rotinaId ? S.rotinas.find(r=>r.id===t.rotinaId) : null;
+
+  sheet.innerHTML = `
+    <header>
+      <span class="tag" id="hCat" style="color:${cor(t.cat)}">${cat(t.cat).nome}</span>
+      <b id="shTitle" style="font-size:15px">${novo?'Nova tarefa':'Tarefa'}</b>
+      ${rot?`<span class="rot">↻ rotina: ${esc(rot.titulo)}</span>`:''}
+      ${!novo&&t.status==='expirado'?'<span class="tag" style="color:var(--bad)">expirada</span>':''}
+      <span style="flex:1"></span>
+      ${novo?'':'<button class="btn sm danger" id="del">Excluir</button>'}
+      <button class="btn sm" id="x" aria-label="Fechar">✕</button>
+    </header>
+    <div class="in">
+      <div class="f"><label for="f_tit">Título</label><input id="f_tit" value="${esc(t.titulo)}" placeholder="O que precisa ser feito">
+        <span class="err hide" id="e_tit">Escreva um título.</span></div>
+      <div class="f"><label for="f_desc">Descrição</label><textarea id="f_desc" placeholder="Contexto, regra de negócio, link da base…">${esc(t.desc)}</textarea></div>
+      <div class="row3">
+        <div class="f"><label for="f_cat">Categoria</label><select id="f_cat">${optC(t.cat)}</select></div>
+        <div class="f"><label for="f_ori">Origem</label><select id="f_ori">${optO(t.origem||'projeto')}</select></div>
+        <div class="f"><label for="f_resp">Responsável</label><select id="f_resp">${optU(t.resp)}</select></div>
+      </div>
+      <div class="row3">
+        <div class="f"><label for="f_pri">Prioridade</label><select id="f_pri">${optP(t.pri)}</select></div>
+        <div class="f"><label for="f_st">Status</label><select id="f_st">${optS(t.status)}</select></div>
+        <div class="f"><label for="f_sol">Solicitante</label><input id="f_sol" value="${esc(t.solicitante)}" placeholder="Área ou pessoa"></div>
+      </div>
+      <div class="row">
+        <div class="f"><label for="f_inicio">Data de início</label><input type="date" id="f_inicio" value="${t.inicio||''}"></div>
+        <div class="f"><label for="f_prazo">Prazo (conclusão)</label><input type="date" id="f_prazo" value="${t.prazo||''}">
+          <span class="err hide" id="e_prazo">Prazo anterior à data de início.</span></div>
+      </div>
+      <div class="f"><label>Rótulos</label>
+        <div class="rotpick" id="rotpick">${Object.entries(ROTULOS).map(([k,c])=>`<button type="button" data-rot="${k}" style="background:${c}" title="${k}" aria-pressed="${(t.rotulos||[]).includes(k)}" aria-label="Rótulo ${k}"></button>`).join('')}</div></div>
+
+      <div class="row">
+        <div class="f"><label for="f_repete">Repetição</label>
+          <select id="f_repete">${Object.entries(REPETE).map(([k,n])=>`<option value="${k}" ${(t.repete||'')===k?'selected':''}>${n}</option>`).join('')}</select>
+          <span class="log">Ao concluir, o sistema cria a próxima automaticamente.</span></div>
+        <div class="f"></div>
+      </div>
+
+      <div class="f"><label>Checklist</label><div id="chk"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="novoChk" placeholder="Adicionar item e apertar Enter" aria-label="Novo item do checklist">
+          <button class="btn sm" id="addChk">Adicionar</button></div></div>
+
+      <div class="f"><label>Comentários</label>
+        <div id="cms">${(t.coment||[]).map(c=>`<div class="line">${avatar(c.autor)}
+          <span style="flex:1">${esc(c.texto)}</span><span class="log">${fmt(c.quando)}</span></div>`).join('')
+          || '<div style="color:var(--mut);font-size:12px;padding:4px 0">Sem comentários.</div>'}</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="novoCm" placeholder="Escrever comentário" aria-label="Novo comentário">
+          <button class="btn sm" id="addCm">Comentar</button></div></div>
+
+      ${novo?'':`<div class="f"><label>Histórico</label>
+        <div>${(t.hist||[]).length?t.hist.slice().reverse().map(x=>`<div class="log">${fmt(x.quando)} · ${esc(user(x.quem).nome)} mudou ${esc(x.campo)} de "${esc(x.de)}" para "${esc(x.para)}"</div>`).join('')
+        :'<div class="log">Criada em '+fmt(t.criada)+'. Sem alterações registradas.</div>'}</div></div>`}
+    </div>
+    <footer>
+      <span style="flex:1" class="log">${novo?'':'Criada em '+fmt(t.criada)}</span>
+      <button class="btn" id="cancel">Cancelar</button>
+      <button class="btn pri" id="save">${novo?'Criar tarefa':'Salvar'}</button>
+    </footer>`;
+  abrir();
+
+  const q = s => sheet.querySelector(s);
+  const pintarChk = () => {
+    q('#chk').innerHTML = chk.map((c,i)=>`<div class="line"><input type="checkbox" data-i="${i}" ${c.d?'checked':''} aria-label="${esc(c.t)}">
+      <span class="${c.d?'done':''}" style="flex:1">${esc(c.t)}</span>
+      <button class="btn sm danger" data-rm="${i}" aria-label="Remover item">✕</button></div>`).join('')
+      || '<div style="color:var(--mut);font-size:12px;padding:4px 0">Sem itens.</div>';
+    q('#chk').querySelectorAll('input').forEach(i=>i.onchange=()=>{chk[+i.dataset.i].d=i.checked;pintarChk();});
+    q('#chk').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{chk.splice(+b.dataset.rm,1);pintarChk();});
+  };
+  pintarChk();
+
+  const addChk = () => { const v=q('#novoChk').value.trim(); if(!v) return; chk.push({t:v,d:false}); q('#novoChk').value=''; pintarChk(); q('#novoChk').focus(); };
+  q('#addChk').onclick = addChk;
+  q('#novoChk').onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); addChk(); } };
+
+  const comentar = () => {
+    const v=q('#novoCm').value.trim(); if(!v) return;
+    if(novo){ toast('Salve a tarefa antes de comentar.', true); return; }
+    t.coment.push({autor:S.me,texto:v,quando:hoje()}); q('#novoCm').value='';
+    if(ONLINE){ DB.comentar(t.id, user(S.me).id, v).catch(e=>toast('Erro no comentário: '+(e.message||e),true)); }
+    abrirTask(t.id); toast('Comentário adicionado.');
+  };
+  q('#addCm').onclick = comentar;
+  q('#novoCm').onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); comentar(); } };
+
+  // prioridade sugere prazo enquanto o usuário não mexer no campo de prazo
+  let prazoTocado = !novo;
+  q('#f_prazo').oninput = () => { prazoTocado = true; valida(); };
+  q('#f_pri').onchange = e => { if(!prazoTocado) q('#f_prazo').value = addDias(q('#f_inicio').value||hoje(), pri(+e.target.value).sla); };
+  q('#f_cat').onchange = e => { q('#hCat').textContent = cat(e.target.value).nome; q('#hCat').style.color = cor(e.target.value); };
+  q('#f_inicio').oninput = valida;
+
+  // rótulos (toggle)
+  const rots = [...(t.rotulos||[])];
+  q('#rotpick').querySelectorAll('[data-rot]').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.rot;
+    if(rots.includes(k)) rots.splice(rots.indexOf(k),1); else rots.push(k);
+    b.setAttribute('aria-pressed', rots.includes(k));
+  });
+
+  function valida(){
+    let ok = true;
+    const tit = q('#f_tit').value.trim();
+    q('#e_tit').classList.toggle('hide', !!tit); if(!tit) ok=false;
+    const pz = q('#f_prazo').value, ini = q('#f_inicio').value;
+    const ruim = pz && ini && dataOk(pz) && dataOk(ini) && diffD(ini, pz) < 0;
+    q('#e_prazo').classList.toggle('hide', !ruim); if(ruim) ok=false;
+    return ok;
+  }
+  valida();
+
+  q('#x').onclick = q('#cancel').onclick = fechar;
+  if(!novo) q('#del').onclick = () => {
+    const idx = S.tasks.indexOf(t);
+    S.tasks = S.tasks.filter(x=>x.id!==t.id); fechar(); render();
+    if(ONLINE){ DB.apagarTask(t.id).catch(e=>toast('Erro ao excluir: '+(e.message||e),true)); }
+    toast('Tarefa excluída.', true, () => { S.tasks.splice(Math.min(idx,S.tasks.length),0,t); render(); });
+  };
+
+  q('#save').onclick = () => {
+    if(!valida()){ q('#f_tit').focus(); toast('Corrija os campos marcados.', true); return; }
+    const o = {
+      titulo:q('#f_tit').value.trim(), desc:q('#f_desc').value, cat:q('#f_cat').value,
+      origem:q('#f_ori').value, resp:q('#f_resp').value, pri:+q('#f_pri').value,
+      status:q('#f_st').value, prazo:q('#f_prazo').value||null, inicio:q('#f_inicio').value||null,
+      solicitante:q('#f_sol').value.trim(), rotulos:rots, repete:q('#f_repete').value||'', check:chk
+    };
+    if(novo){
+      const nova = Object.assign({id:uid(),criada:hoje(),rotinaId:null,concluida:null,coment:[],hist:[]}, o);
+      nova.concluida = nova.status==='concluido' ? hoje() : null;
+      S.tasks.push(nova);
+      if(ONLINE){ DB.salvarTask(nova, true).then(recarregar).catch(e=>toast('Erro ao salvar: '+(e.message||e),true)); }
+      toast('Tarefa criada.');
+    } else {
+      ['status','resp','pri','prazo'].forEach(k=>{
+        if(String(t[k]) !== String(o[k])){
+          const rot = k==='status' ? stName : k==='resp' ? (v=>user(v).nome) : k==='pri' ? (v=>pri(v).n) : (v=>v||'sem prazo');
+          t.hist.push({campo:k==='resp'?'responsável':k==='pri'?'prioridade':k,de:rot(t[k]),para:rot(o[k]),quem:S.me,quando:hoje()});
+        }
+      });
+      Object.assign(t, o);
+      t.concluida = t.status==='concluido' ? (t.concluida || hoje()) : null;
+      if(ONLINE){ DB.salvarTask(t, false).then(recarregar).catch(e=>toast('Erro ao salvar: '+(e.message||e),true)); }
+      toast('Tarefa salva.');
+    }
+    fechar(); render();
+  };
+}
+
+function abrirRotina(id){
+  ultimoFoco = document.activeElement;
+  const orig = id ? S.rotinas.find(x=>x.id===id) : null;
+  if(id && !orig){ toast('Rotina não encontrada.', true); return; }
+  const novo = !orig;
+  const r = orig || {titulo:'',cat:'BI',resp:S.me,pri:3,est:1,freq:'uteis',dias:[1],diaMes:1,prazoOffset:0,expiraDias:2,ativa:true,ultima:null};
+  let dias = [...(r.dias||[])];
+
+  sheet.innerHTML = `
+    <header><b id="shTitle" style="font-size:15px">${novo?'Nova rotina':'Rotina'}</b><span style="flex:1"></span>
+      ${novo?'':'<button class="btn sm danger" id="del">Excluir</button>'}
+      <button class="btn sm" id="x" aria-label="Fechar">✕</button></header>
+    <div class="in">
+      <div class="f"><label for="r_tit">Título da rotina</label>
+        <input id="r_tit" value="${esc(r.titulo)}" placeholder="Ex.: Checar atualização das bases às 07h">
+        <span class="err hide" id="e_tit">Escreva um título.</span></div>
+      <div class="row3">
+        <div class="f"><label for="r_cat">Categoria</label><select id="r_cat">${optC(r.cat)}</select></div>
+        <div class="f"><label for="r_resp">Responsável</label><select id="r_resp">${optU(r.resp)}</select></div>
+        <div class="f"><label for="r_pri">Prioridade</label><select id="r_pri">${optP(r.pri)}</select></div>
+      </div>
+      <div class="f"><label for="r_freq">Repetição</label>
+        <select id="r_freq">
+          <option value="diaria"  ${r.freq==='diaria'?'selected':''}>Todo dia</option>
+          <option value="uteis"   ${r.freq==='uteis'?'selected':''}>Dias úteis (seg a sex)</option>
+          <option value="semanal" ${r.freq==='semanal'?'selected':''}>Dias específicos da semana</option>
+          <option value="mensal"  ${r.freq==='mensal'?'selected':''}>Uma vez por mês</option>
+        </select></div>
+      <div class="f ${r.freq==='semanal'?'':'hide'}" id="boxDias"><label>Dias da semana</label>
+        <div class="days">${DIAS.map((d,i)=>`<button type="button" data-d="${i}" aria-pressed="${dias.includes(i)}">${d}</button>`).join('')}</div>
+        <span class="err hide" id="e_dias">Escolha pelo menos um dia.</span></div>
+      <div class="f ${r.freq==='mensal'?'':'hide'}" id="boxMes"><label for="r_dm">Dia do mês</label>
+        <input type="number" min="1" max="28" id="r_dm" value="${r.diaMes||1}">
+        <span class="log">Limitado a 28 para não pular fevereiro.</span></div>
+      <div class="row3">
+        <div class="f"><label for="r_est">Horas estimadas</label><input type="number" step="0.5" min="0" max="40" id="r_est" value="${r.est}"></div>
+        <div class="f"><label for="r_off">Prazo (dias após criar)</label><input type="number" min="0" max="30" id="r_off" value="${r.prazoOffset||0}"></div>
+        <div class="f"><label for="r_exp">Expira em (dias)</label><input type="number" min="0" max="60" id="r_exp" value="${r.expiraDias||0}">
+          <span class="log">0 = nunca expira e acumula no quadro.</span></div>
+      </div>
+      <div class="f"><label for="r_ativa">Situação</label>
+        <select id="r_ativa"><option value="1" ${r.ativa?'selected':''}>Ativa</option><option value="0" ${r.ativa?'':'selected'}>Pausada</option></select></div>
+      <div class="hint" style="margin:0">A rotina é o molde. Quando a data bate, ela cria uma tarefa nova no quadro com esses dados.
+      Se a tarefa não for concluída dentro do prazo de expiração, ela sai do quadro e conta como rotina perdida no painel — é assim que você enxerga rotina que ninguém cumpre.</div>
+    </div>
+    <footer><button class="btn" id="cancel">Cancelar</button><button class="btn pri" id="save">${novo?'Criar rotina':'Salvar'}</button></footer>`;
+  abrir();
+
+  const q = s => sheet.querySelector(s);
+  q('#r_freq').onchange = e => {
+    q('#boxDias').classList.toggle('hide', e.target.value!=='semanal');
+    q('#boxMes').classList.toggle('hide', e.target.value!=='mensal');
+  };
+  sheet.querySelectorAll('.days button').forEach(b=>b.onclick=()=>{
+    const d=+b.dataset.d;
+    if(dias.includes(d)) dias = dias.filter(x=>x!==d); else dias.push(d);
+    b.setAttribute('aria-pressed', dias.includes(d));
+    q('#e_dias').classList.add('hide');
+  });
+  q('#x').onclick = q('#cancel').onclick = fechar;
+  if(!novo) q('#del').onclick = () => {
+    const idx = S.rotinas.indexOf(r);
+    S.rotinas = S.rotinas.filter(x=>x.id!==r.id); fechar(); render();
+    if(ONLINE){ DB.apagarRotina(r.id).catch(e=>toast('Erro ao excluir rotina: '+(e.message||e),true)); }
+    toast('Rotina excluída. As tarefas já geradas continuam.', true, () => { S.rotinas.splice(idx,0,r); render(); });
+  };
+
+  q('#save').onclick = () => {
+    const tit = q('#r_tit').value.trim(), freq = q('#r_freq').value;
+    q('#e_tit').classList.toggle('hide', !!tit);
+    const semDia = freq==='semanal' && !dias.length;
+    q('#e_dias').classList.toggle('hide', !semDia);
+    if(!tit || semDia){ toast('Corrija os campos marcados.', true); return; }
+    const o = {titulo:tit, cat:q('#r_cat').value, resp:q('#r_resp').value, pri:+q('#r_pri').value, freq,
+      dias:dias.slice().sort(), diaMes:Math.min(28,Math.max(1,+q('#r_dm').value||1)),
+      est:Math.max(0,+q('#r_est').value||0), prazoOffset:Math.max(0,+q('#r_off').value||0),
+      expiraDias:Math.max(0,+q('#r_exp').value||0), ativa:q('#r_ativa').value==='1'};
+    if(novo){ const nr = Object.assign({id:uid(), ultima:addDias(hoje(),-1)}, o); S.rotinas.push(nr);
+      if(ONLINE){ DB.salvarRotina(nr,true).then(()=>DB.processarRotinas()).then(recarregar).catch(e=>toast('Erro ao salvar rotina: '+(e.message||e),true)); } }
+    else { Object.assign(r, o);
+      if(ONLINE){ DB.salvarRotina(r,false).catch(e=>toast('Erro ao salvar rotina: '+(e.message||e),true)); } }
+    const n = gerarRotinas(); expirarRotinas();
+    fechar(); render();
+    toast(novo ? `Rotina criada${n?` · ${n} tarefa(s) gerada(s)`:''}.` : 'Rotina salva.');
+  };
+}
+
+/* ---------- AJUDA / PRIMEIRO ACESSO ---------- */
+function abrirAjuda(){
+  ultimoFoco = document.activeElement;
+  sheet.innerHTML = `
+    <header><b id="shTitle" style="font-size:15px">Como usar a Central da Equipe</b>
+      <span style="flex:1"></span><button class="btn sm" id="x" aria-label="Fechar">✕</button></header>
+    <div class="in" style="gap:18px">
+      <p style="margin:0;line-height:1.6">É um quadro onde a equipe registra o que precisa fazer, quem faz e até quando.
+      Tudo fica salvo direto neste navegador — não precisa instalar nada.</p>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom:8px">Os 4 espaços do topo</div>
+        <div style="display:grid;gap:8px">
+          ${[
+            ['Quadro','O painel principal. Cada cartão é uma tarefa. Arraste o cartão entre as colunas conforme o trabalho anda: <b>A fazer → Em andamento → Em validação → Concluída</b>. Se preferir, clique no cartão e mude o status por dentro.'],
+            ['Minhas tarefas','Só o que é seu, do prazo mais apertado pro mais folgado.'],
+            ['Lista completa','Tudo em formato de tabela. Dá pra ordenar clicando no título de cada coluna.'],
+            ['Rotinas','Tarefas que se repetem (todo dia, toda terça, todo dia 5). Você cadastra uma vez e o sistema cria a tarefa sozinho na data certa.'],
+            ['Coordenação','Visão de quem lidera: quem está sobrecarregado, o que vence na semana e o que travou.']
+          ].map(([t,d])=>`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:11px">
+            <b style="font-size:13px">${t}</b><div style="color:var(--mut);font-size:12.5px;line-height:1.5;margin-top:3px">${d}</div></div>`).join('')}
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom:8px">Para criar sua primeira tarefa</div>
+        <ol style="margin:0;padding-left:18px;line-height:1.7;color:var(--mut);font-size:13px">
+          <li>Clique no botão verde <b style="color:var(--tx)">+ Nova tarefa</b> lá em cima.</li>
+          <li>Escreva o título e escolha o responsável e o prazo.</li>
+          <li>Clique em <b style="color:var(--tx)">Criar tarefa</b>. Pronto, ela aparece no Quadro.</li>
+        </ol>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom:8px">O que significam as palavras</div>
+        <div style="display:grid;gap:6px;font-size:12.5px;color:var(--mut)">
+          <div><b style="color:var(--tx)">Categoria</b> — o tipo do trabalho: B.I, ADM, Chamado ou Gestão.</div>
+          <div><b style="color:var(--tx)">Origem</b> — de onde veio: um pedido que chegou (Chamado), algo planejado (Projeto), uma ideia de melhorar (Melhoria) ou uma rotina.</div>
+          <div><b style="color:var(--tx)">Em validação</b> — a tarefa está pronta e esperando alguém conferir.</div>
+          <div><b style="color:var(--tx)">Em validação</b> — a tarefa está pronta e esperando alguém conferir.</div>
+        </div>
+      </div>
+
+      <div style="background:var(--panel2);border-left:3px solid var(--ok);border-radius:8px;padding:11px;font-size:12.5px;line-height:1.55">
+        <b>Seus dados ficam salvos neste navegador, neste computador.</b> Para levar para outro lugar ou fazer backup,
+        use <b>Salvar cópia</b> (gera um arquivo) e <b>Abrir cópia</b> para trazer de volta.
+        ${temStorage?'':'<br><span style="color:var(--warn)">Atenção: nesta prévia os dados não estão sendo salvos. Baixe o arquivo e abra no seu navegador.</span>'}
+      </div>
+
+      <p class="log" style="margin:0">Atalhos: tecla <b>N</b> cria tarefa, tecla <b>/</b> vai para a busca.</p>
+    </div>
+    <footer><button class="btn pri" id="ok">Entendi, começar</button></footer>`;
+  abrir();
+  sheet.querySelector('#x').onclick = sheet.querySelector('#ok').onclick = fechar;
+}
+
+/* =========================================================================
+   7. INTERAÇÕES DO QUADRO
+   ========================================================================= */
+function mover(id, novoSt){
+  const t = S.tasks.find(x=>x.id===id); if(!t || t.status===novoSt) return;
+  const stAntes = t.status, conclAntes = t.concluida;
+  t.hist = t.hist || [];
+  t.hist.push({campo:'status', de:stName(t.status), para:stName(novoSt), quem:S.me, quando:hoje()});
+  t.status = novoSt;
+  t.concluida = novoSt==='concluido' ? (t.concluida || hoje()) : null;
+
+  // recorrência: ao concluir uma tarefa que repete, cria a próxima ocorrência
+  let criada = null;
+  if(novoSt==='concluido' && t.repete){
+    const baseData = t.prazo || t.concluida || hoje();
+    const prox = proximaData(baseData, t.repete);
+    const origem = t.repeteOrigem || t.id;
+    if(prox && !S.tasks.some(x=>(x.repeteOrigem||x.id)===origem && x.prazo===prox && x.status!=='concluido')){
+      criada = {
+        id: uid(), titulo:t.titulo, desc:t.desc, cat:t.cat, origem:t.origem, resp:t.resp,
+        solicitante:t.solicitante, pri:t.pri, status:'backlog', criada:hoje(),
+        inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete, repeteOrigem:origem,
+        check:(t.check||[]).map(c=>({t:c.t,d:false})), concluida:null, coment:[], hist:[]
+      };
+      S.tasks.push(criada);
+    }
+  }
+  render();
+  if(ONLINE){
+    DB.moverTask(id, t.status, t.concluida).catch(e=>toast('Erro ao mover: '+(e.message||e),true));
+    if(criada) DB.salvarTask(criada, true).then(recarregar).catch(e=>toast('Erro ao repetir: '+(e.message||e),true));
+  }
+  const card = $('#view').querySelector(`.card[data-id="${id}"]`);
+  if(card) card.focus();
+  const msgRep = criada ? ` · próxima criada p/ ${fmt(criada.prazo)}` : '';
+  toast(`"${t.titulo.slice(0,26)}${t.titulo.length>26?'…':''}" → ${stName(novoSt)}${msgRep}`, false, () => {
+    t.status = stAntes; t.concluida = conclAntes; t.hist.pop();
+    if(criada){ S.tasks = S.tasks.filter(x=>x.id!==criada.id); if(ONLINE) DB.apagarTask(criada.id).catch(()=>{}); }
+    render();
+    if(ONLINE){ DB.moverTask(id, stAntes, conclAntes).catch(()=>{}); }
+  });
+}
+
+function ligarBoard(){
+  let arrastando = null;
+  $('#view').querySelectorAll('.card').forEach(c=>{
+    c.addEventListener('dragstart', e => { arrastando = c.dataset.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', c.dataset.id); });
+    c.addEventListener('dragend',   () => { c.classList.remove('dragging'); arrastando=null; $('#view').querySelectorAll('.col').forEach(x=>x.classList.remove('drop')); });
+    c.querySelectorAll('[data-mv]').forEach(b=>b.addEventListener('click', e => {
+      e.stopPropagation();
+      const st = S.tasks.find(t=>t.id===c.dataset.id); if(!st) return;
+      const i = STATUS.findIndex(s=>s.k===st.status);
+      const alvo = b.dataset.mv==='prox' ? STATUS[i+1] : STATUS[i-1];
+      if(alvo) mover(c.dataset.id, alvo.k);
+    }));
+    const bc = c.querySelector('[data-conc]');
+    if(bc) bc.addEventListener('click', e => {
+      e.stopPropagation();
+      const st = S.tasks.find(t=>t.id===c.dataset.id); if(!st) return;
+      mover(c.dataset.id, st.status==='concluido' ? 'backlog' : 'concluido');
+    });
+    c.addEventListener('click', e => { if(!e.target.closest('[data-mv]')) abrirTask(c.dataset.id); });
+    c.addEventListener('keydown',   e => {
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); abrirTask(c.dataset.id); return; }
+      const i = STATUS.findIndex(s=>s.k===(S.tasks.find(t=>t.id===c.dataset.id)||{}).status);
+      if(e.key==='ArrowRight' && i<STATUS.length-1){ e.preventDefault(); mover(c.dataset.id, STATUS[i+1].k); }
+      if(e.key==='ArrowLeft'  && i>0)              { e.preventDefault(); mover(c.dataset.id, STATUS[i-1].k); }
+    });
+  });
+  $('#view').querySelectorAll('.col').forEach(col=>{
+    col.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drop'); });
+    col.addEventListener('dragleave', e => { if(!col.contains(e.relatedTarget)) col.classList.remove('drop'); });
+    col.addEventListener('drop',      e => {
+      e.preventDefault(); col.classList.remove('drop');
+      const id = arrastando || e.dataTransfer.getData('text/plain');
+      if(id) mover(id, col.dataset.st);
+    });
+  });
+}
+
+function ligarLinhas(){
+  $('#view').querySelectorAll('[data-id]').forEach(el=>{
+    el.onclick = () => abrirTask(el.dataset.id);
+    el.onkeydown = e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); abrirTask(el.dataset.id); } };
+  });
+}
+
+/* =========================================================================
+   8. RENDER + BOOT
+   ========================================================================= */
+const TITULOS = {board:'Quadro', minhas:'Minhas tarefas', lista:'Lista completa', painel:'Painel da coordenação'};
+const VIEWS   = {board:vBoard, minhas:vMinhas, lista:vLista, painel:vPainel};
+
+function render(){
+  if(S.view==='painel' && !ehGestor()) S.view='board';   // trava de segurança
+  $('#title').textContent = TITULOS[S.view] || 'Quadro';
+  const semFiltro = S.view==='painel' || S.view==='rotinas';
+  $('#filters').classList.toggle('hide', semFiltro);
+  (VIEWS[S.view] || vBoard)();
+  const abertas = S.tasks.filter(ativa);
+  $('#nb').textContent = ehGestor() ? abertas.length : abertas.filter(t=>t.resp===S.me).length;
+  $('#nm').textContent = abertas.filter(t=>t.resp===S.me).length;
+  const at = abertas.filter(isAtrasada).length;
+  $('#na').textContent = at || '';
+  $('#na').classList.toggle('alert', !!at);
+  aplicarPermissoes();
+  const fg = $('#fGroup'); if(fg && !fg.classList.contains('hide')) fg.classList.toggle('hide', S.view!=='board');
+  salvar();
+  const info = $('#salvoInfo');
+  if(info) info.innerHTML = temStorage
+    ? '✓ Salvo neste navegador'
+    : '<span style="color:var(--warn)">Prévia: não está salvando</span>';
+}
+
+function aplicarTema(){
+  const u = user(S.me);
+  document.documentElement.style.setProperty('--eu', u.cor || 'var(--ok)');
+  const card = $('#euCard');
+  if(card) card.innerHTML = `${avatar(u.id)}<div class="info"><b>${esc(u.nome)}</b><span>${esc(u.cargo||(u.papel==='coordenacao'?'Coordenação':u.papel==='admin'?'Administrador':'Analista'))}</span></div>`;
+  aplicarPermissoes();
+}
+
+// mostra/esconde o que é exclusivo do gestor
+function aplicarPermissoes(){
+  const gestor = ehGestor();
+  const abaCoord = document.querySelector('#nav button[data-v="painel"]');
+  if(abaCoord) abaCoord.classList.toggle('hide', !gestor);
+  // filtros que só fazem sentido pra quem vê o time todo
+  const fResp = $('#fResp'), fGroup = $('#fGroup');
+  if(fResp)  fResp.classList.toggle('hide', !gestor);
+  if(fGroup) fGroup.classList.toggle('hide', !gestor);
+  // se um não-gestor estava na aba Coordenação, tira ele de lá
+  if(!gestor && S.view==='painel'){ S.view='board'; const b=document.querySelector('#nav button[data-v="board"]');
+    if(b){ document.querySelectorAll('#nav button').forEach(x=>x.removeAttribute('aria-current')); b.setAttribute('aria-current','page'); } }
+}
+
+function montarSelects(){
+  const opts = S.users.map(u=>`<option value="${u.id}">${esc(u.nome)}${u.cargo?' · '+esc(u.cargo):''}</option>`).join('');
+  $('#me').innerHTML = opts;
+  $('#fResp').innerHTML = '<option value="">Todo mundo</option>' + S.users.map(u=>`<option value="${u.id}">${esc(u.nome)}</option>`).join('');
+  if(!S.users.some(u=>u.id===S.me)) S.me = (S.users[0]||{}).id || '';
+  $('#me').value = S.me; $('#fResp').value = S.filtro.resp;
+  aplicarTema();
+}
+
+// carga inicial dos selects fixos
+Object.entries(CATS).forEach(([k,c])=>{
+  $('#fCat').insertAdjacentHTML('beforeend', `<option value="${k}">${c.nome}</option>`);
+  $('#catLeg').insertAdjacentHTML('beforeend', `<span class="chip on" style="color:${c.cor}"><span class="dot"></span>${c.nome}</span>`);
+});
+Object.entries(ORIGENS).forEach(([k,n])=> $('#fOri').insertAdjacentHTML('beforeend', `<option value="${k}">${n}</option>`));
+
+$('#nav').addEventListener('click', e => {
+  const b = e.target.closest('button[data-v]'); if(!b) return;
+  $('#nav').querySelectorAll('button').forEach(x=>x.removeAttribute('aria-current'));
+  b.setAttribute('aria-current','page'); S.view = b.dataset.v; render();
+});
+$('#me').onchange   = e => { S.me = e.target.value; aplicarTema(); render(); };
+let deb; $('#q').oninput = e => { clearTimeout(deb); const v=e.target.value; deb=setTimeout(()=>{S.filtro.q=v;render();},180); };
+$('#fCat').onchange = e => { S.filtro.cat = e.target.value; render(); };
+$('#fResp').onchange= e => { S.filtro.resp= e.target.value; render(); };
+$('#fPri').onchange = e => { S.filtro.pri = e.target.value; render(); };
+$('#fOri').onchange = e => { S.filtro.ori = e.target.value; render(); };
+$('#fDe').onchange  = e => { S.filtro.de  = e.target.value; render(); };
+$('#fAte').onchange = e => { S.filtro.ate = e.target.value; render(); };
+$('#fGroup').onchange = e => { S.grupo = e.target.value; render(); };
+$('#limpar').onclick = () => {
+  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''};
+  ['#q','#fCat','#fResp','#fPri','#fOri','#fDe','#fAte'].forEach(s=>$(s)&&($(s).value='')); render();
+};
+$('#newTask').onclick = () => abrirTask(null);
+$('#ajuda').onclick   = abrirAjuda;
+function aplicaTema(t){
+  document.documentElement.setAttribute('data-tema', t);
+  try{ localStorage.setItem('central-tema', t); }catch(e){}
+  const b1=document.querySelector('#temaTop'), b2=document.querySelector('#tema');
+  // mostra a ação: se está escuro, oferece "Modo Claro"; se claro, "Modo Escuro"
+  if(b1) b1.textContent = t==='claro' ? '🌙 Modo Escuro' : '☀️ Modo Claro';
+  if(b2) b2.textContent = t==='claro' ? '🌙 Modo Escuro' : '☀️ Modo Claro';
+}
+function toggleTema(){
+  const atual = document.documentElement.getAttribute('data-tema')==='claro' ? 'escuro' : 'claro';
+  aplicaTema(atual);
+}
+$('#tema').onclick = toggleTema;
+if($('#temaTop')) $('#temaTop').onclick = toggleTema;
+// aplica tema salvo ao abrir
+try{ const tm=localStorage.getItem('central-tema')||'claro'; aplicaTema(tm); }catch(e){}
+$('#zerar').onclick   = () => {
+  if(!confirm('Recomeçar do zero apaga todas as tarefas e rotinas deste navegador e não pode ser desfeito. Deseja continuar?\n\nDica: use "Salvar cópia" antes, se quiser guardar o que já tem.')) return;
+  limparTudo();
+  S.users = S.users; S.tasks = []; S.rotinas = [];
+  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''};
+  ['#q','#fCat','#fResp','#fPri','#fOri','#fDe','#fAte'].forEach(s=>$(s)&&($(s).value=''));
+  render(); toast('Tudo limpo. Comece criando uma tarefa.');
+};
+
+$('#exp').onclick = () => {
+  const blob = new Blob([JSON.stringify({versao:2, exportadoEm:new Date().toISOString(), users:S.users, tasks:S.tasks, rotinas:S.rotinas}, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `central-equipe-${hoje()}.json`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  toast('Cópia salva na sua pasta de downloads.');
+};
+$('#imp').onclick = () => {
+  const i = document.createElement('input'); i.type='file'; i.accept='application/json,.json';
+  i.onchange = () => {
+    const f = i.files && i.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        const d = JSON.parse(rd.result);
+        if(!Array.isArray(d.tasks) || !Array.isArray(d.users)) throw new Error('estrutura');
+        S.users   = d.users;
+        S.tasks   = d.tasks.map(t=>Object.assign({origem:'projeto',check:[],coment:[],hist:[],est:0,gasto:0},t));
+        S.rotinas = Array.isArray(d.rotinas)?d.rotinas:[];
+        montarSelects(); gerarRotinas(); expirarRotinas(); render();
+        toast(`Importado: ${S.tasks.length} tarefas e ${S.rotinas.length} rotinas.`);
+      }catch(err){ toast('Arquivo inválido. Esperado o JSON exportado por este app.', true); }
+    };
+    rd.onerror = () => toast('Não foi possível ler o arquivo.', true);
+    rd.readAsText(f);
+  };
+  i.click();
+};
+
+// atalho global
+document.addEventListener('keydown', e => {
+  if(ov.classList.contains('on')) return;
+  if(e.key==='n' && !/input|textarea|select/i.test(document.activeElement.tagName)){ e.preventDefault(); abrirTask(null); }
+  if(e.key==='/' && !/input|textarea|select/i.test(document.activeElement.tagName)){ e.preventDefault(); $('#q').focus(); }
+});
+
+/* =========================================================================
+   9. CAMADA DE DADOS SUPABASE  (online)  +  LOGIN
+   Converte entre o formato do app (S.tasks/S.rotinas/S.users) e as colunas
+   das tabelas equipe.*. Em modo local isso nem é usado.
+   ========================================================================= */
+const DB = {
+  // ----- carregar tudo do banco para o estado do app -----
+  async carregarTudo(){
+    const [mem, tar, rot] = await Promise.all([
+      sb.from('membros').select('*').order('nome'),
+      sb.from('tarefas').select('*, checklist(*), comentarios(*)'),
+      sb.from('rotinas').select('*')
+    ]);
+    if(mem.error) throw mem.error;
+    if(tar.error) throw tar.error;
+    if(rot.error) throw rot.error;
+
+    S.users = mem.data.map(m=>({id:m.id, nome:m.nome, ini:m.iniciais, papel:m.papel,
+      cargo:m.cargo, cor:m.cor, capacidade:Number(m.capacidade)||8, email:m.email, auth_id:m.auth_id}));
+
+    S.tasks = tar.data.map(fromRow);
+    S.rotinas = rot.data.map(r=>({id:r.id, titulo:r.titulo, cat:r.categoria_id, resp:r.responsavel,
+      pri:r.prioridade, est:Number(r.horas_est)||0, freq:r.freq, dias:r.dias_semana||[],
+      diaMes:r.dia_mes||1, prazoOffset:r.prazo_offset||0, expiraDias:r.expira_dias||0,
+      ativa:r.ativa, ultima:r.ultima_geracao}));
+  },
+  // ----- tarefa: criar/atualizar/apagar -----
+  async salvarTask(t, novo){
+    const row = toRow(t);
+    if(novo){
+      const {data, error} = await sb.from('tarefas').insert(row).select().single();
+      if(error) throw error; t.id = data.id;
+    } else {
+      const {error} = await sb.from('tarefas').update(row).eq('id', t.id);
+      if(error) throw error;
+    }
+    await sincronizarChecklist(t);
+  },
+  async moverTask(id, status, concluida){
+    const {error} = await sb.from('tarefas').update({status, concluido_em: concluida}).eq('id', id);
+    if(error) throw error;
+  },
+  async apagarTask(id){ const {error} = await sb.from('tarefas').delete().eq('id', id); if(error) throw error; },
+  async comentar(tarefa_id, autor, texto){
+    const {error} = await sb.from('comentarios').insert({tarefa_id, autor, texto}); if(error) throw error;
+  },
+  // ----- rotina -----
+  async salvarRotina(r, novo){
+    const row = {titulo:r.titulo, categoria_id:r.cat, responsavel:r.resp, prioridade:r.pri,
+      horas_est:r.est, freq:r.freq, dias_semana:r.dias, dia_mes:r.diaMes, prazo_offset:r.prazoOffset,
+      expira_dias:r.expiraDias, ativa:r.ativa};
+    if(novo){ const {data,error}=await sb.from('rotinas').insert(row).select().single(); if(error) throw error; r.id=data.id; }
+    else { const {error}=await sb.from('rotinas').update(row).eq('id', r.id); if(error) throw error; }
+  },
+  async apagarRotina(id){ const {error}=await sb.from('rotinas').delete().eq('id', id); if(error) throw error; },
+  // ----- rotinas do dia + expiração no servidor -----
+  async processarRotinas(){
+    const a = await sb.rpc('gerar_tarefas_rotina'); if(a.error) throw a.error;
+    const b = await sb.rpc('expirar_rotinas');      if(b.error) throw b.error;
+    return {geradas:a.data||0, expiradas:b.data||0};
+  }
+};
+function fromRow(r){
+  return {id:r.id, titulo:r.titulo, desc:r.descricao||'', cat:r.categoria_id, origem:r.origem||'projeto',
+    resp:r.responsavel, solicitante:r.solicitante||'', pri:r.prioridade, status:r.status,
+    criada:(r.criado_em||'').slice(0,10), inicio:r.data_inicio||null, prazo:r.prazo,
+    rotulos:Array.isArray(r.rotulos)?r.rotulos:[], repete:r.repete||'', repeteOrigem:r.repete_origem||null,
+    check:(r.checklist||[]).sort((a,b)=>a.ordem-b.ordem).map(c=>({id:c.id,t:c.texto,d:c.feito})),
+    rotinaId:r.rotina_id, concluida:r.concluido_em,
+    coment:(r.comentarios||[]).map(c=>({autor:c.autor,texto:c.texto,quando:(c.criado_em||'').slice(0,10)})), hist:[]};
+}
+const ehUUID = v => typeof v==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+function toRow(t){
+  const resp = ehUUID(t.resp) ? t.resp : null;
+  const criador = ehUUID(user(S.me).id) ? user(S.me).id : null;
+  return {titulo:t.titulo, descricao:t.desc, categoria_id:t.cat, origem:t.origem, responsavel:resp,
+    solicitante:t.solicitante, prioridade:t.pri, status:t.status, prazo:t.prazo||null, data_inicio:t.inicio||null,
+    rotulos:t.rotulos||[], repete:t.repete||'', repete_origem:ehUUID(t.repeteOrigem)?t.repeteOrigem:null,
+    concluido_em:t.concluida||null, criado_por:criador};
+}
+async function sincronizarChecklist(t){
+  // estratégia simples e segura: apaga os itens da tarefa e regrava
+  await sb.from('checklist').delete().eq('tarefa_id', t.id);
+  if(t.check && t.check.length){
+    await sb.from('checklist').insert(t.check.map((c,i)=>({tarefa_id:t.id, texto:c.t, feito:c.d, ordem:i})));
+  }
+}
+
+// recarrega do banco e redesenha (usado depois de cada gravação online)
+async function recarregar(){
+  if(!ONLINE) return;
+  try{ await DB.carregarTudo(); montarSelects(); render(); }
+  catch(e){ toast('Erro ao atualizar: '+(e.message||e), true); }
+}
+
+/* ---------- LOGIN ---------- */
+function telaLogin(){
+  document.querySelector('.app').style.display='none';
+  const box = document.createElement('div');
+  box.id='loginWrap';
+  box.style.cssText='position:fixed;inset:0;display:grid;place-items:center;padding:24px;background:var(--bg);z-index:500';
+  box.innerHTML=`
+    <div style="width:100%;max-width:360px">
+      <div style="text-align:center;margin-bottom:22px">
+        <div style="width:34px;height:4px;border-radius:3px;background:var(--ok);margin:0 auto 12px"></div>
+        <div class="eyebrow">Trade Marketing</div>
+        <h1 style="margin:4px 0 0;font-size:22px;letter-spacing:-.02em">Central da Equipe</h1>
+      </div>
+      <div class="panel" style="padding:20px">
+        <div class="f" style="margin-bottom:14px"><label for="lg_email">E-mail</label>
+          <input id="lg_email" type="email" autocomplete="username" placeholder="voce@empresa.com"></div>
+        <div class="f" style="margin-bottom:16px"><label for="lg_senha">Senha</label>
+          <input id="lg_senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+        <button class="btn pri" id="lg_btn" style="width:100%;justify-content:center;padding:11px">Entrar</button>
+        <div id="lg_err" style="color:var(--bad);font-size:12.5px;margin-top:12px;min-height:16px"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(box);
+  const err = box.querySelector('#lg_err');
+  const entrar = async () => {
+    const email = box.querySelector('#lg_email').value.trim();
+    const senha = box.querySelector('#lg_senha').value;
+    if(!email || !senha){ err.textContent='Preencha e-mail e senha.'; return; }
+    err.textContent='Entrando…';
+    try{
+      const {data, error} = await sb.auth.signInWithPassword({email, password:senha});
+      if(error){ err.textContent = /invalid/i.test(error.message)?'E-mail ou senha incorretos.':error.message; return; }
+      // registra o acesso (log + mantém o projeto ativo)
+      try{ await sb.rpc('registrar_acesso', {p_email:email, p_user_agent:navigator.userAgent}); }catch(_){}
+      await iniciarApp(data.user);
+    }catch(e){ err.textContent = 'Falha ao conectar: '+(e.message||e); }
+  };
+  box.querySelector('#lg_btn').onclick = entrar;
+  box.querySelector('#lg_senha').onkeydown = e => { if(e.key==='Enter') entrar(); };
+  box.querySelector('#lg_email').focus();
+}
+
+async function iniciarApp(authUser){
+  const w = document.querySelector('#loginWrap'); if(w) w.remove();
+  document.querySelector('.app').style.display='';
+  // ONLINE nunca mostra dados de exemplo: zera antes de puxar do banco
+  S.tasks = []; S.rotinas = []; S.users = [];
+  try{
+    await DB.carregarTudo();
+    // quem sou eu: casa por auth_id, senão por e-mail (minúsculo)
+    const email = (authUser.email||'').toLowerCase();
+    let meu = S.users.find(u=>u.auth_id===authUser.id)
+           || S.users.find(u=>(u.email||'').toLowerCase()===email);
+    if(!meu){
+      // não achou o membro deste login: não deixa criar nada com ID inválido
+      toast('Seu login ('+email+') não está vinculado a nenhum membro no banco. Avise o administrador.', true);
+      render();
+      const sel0=document.querySelector('#me'); if(sel0) sel0.disabled=true;
+      return;
+    }
+    S.me = meu.id;
+    // conserta o vínculo se o auth_id ainda não estava salvo
+    if(!meu.auth_id){ try{ await sb.from('membros').update({auth_id:authUser.id}).eq('id', meu.id); meu.auth_id=authUser.id; }catch(_){} }
+    try{ const r = await DB.processarRotinas(); if(r.geradas) toast(`${r.geradas} tarefa(s) de rotina geradas.`); await DB.carregarTudo(); }catch(_){}
+    montarSelects(); render();
+  }catch(e){
+    S.tasks = []; S.rotinas = []; montarSelects(); render();
+    toast('Não consegui carregar do banco: '+(e.message||e)+'. Recarregue a página.', true);
+  }
+  // login travado: identidade vem da conta
+  const sel=document.querySelector('#me');
+  if(sel){ sel.disabled=true; sel.title='Você está logado como '+user(S.me).nome; }
+  if(!document.querySelector('#sair')){
+    const b=document.createElement('button'); b.id='sair'; b.className='btn sm'; b.textContent='Sair';
+    b.onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+    const io=document.querySelector('.who .io'); if(io) io.appendChild(b);
+  }
+}
+
+// carrega o que já estava salvo; se não houver nada, mantém os dados de exemplo
+const tinha = carregar();
+montarSelects();
+const ger = gerarRotinas(); const exp = expirarRotinas();
+render();
+
+if(ONLINE){
+  // modo banco: mostra login e só entra com sessão válida
+  sb.auth.getSession().then(({data})=>{
+    if(data.session){ iniciarApp(data.session.user); }
+    else { telaLogin(); }
+  }).catch(()=> telaLogin());
+} else {
+  // modo local (sem banco configurado)
+  if(!temStorage){
+    toast('Modo prévia: os dados não ficam salvos aqui. Baixe o arquivo e abra no seu navegador para salvar.', true);
+  }
+  let primeiro = false;
+  try{ primeiro = temStorage && !localStorage.getItem('central-equipe-visto'); }catch(e){}
+  if(primeiro){ setTimeout(abrirAjuda, 300); try{ localStorage.setItem('central-equipe-visto','1'); }catch(e){} }
+  else if(ger) toast(`${ger} tarefa(s) de rotina gerada(s)${exp?` · ${exp} expirada(s)`:''}.`);
+}
+</script>
+</html>
