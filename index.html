@@ -61,6 +61,7 @@ main{overflow:auto;display:flex;flex-direction:column}
 .btn.pri{background:var(--eu);border-color:var(--eu);color:#0B1418;font-weight:700}
 .btn.pri:hover{filter:brightness(1.08)}
 .btn.sm{padding:5px 9px;font-size:12px}
+.perbtns [data-per][aria-pressed="true"]{background:var(--eu);border-color:var(--eu);color:#0B1418;font-weight:700}
 .btn.danger{color:var(--bad)}
 .wrap{padding:20px 24px 70px}
 
@@ -243,8 +244,13 @@ tbody tr{cursor:pointer}
         <select id="fResp" aria-label="Responsável"><option value="">Todo mundo</option></select>
         <select id="fPri" aria-label="Prioridade"><option value="">Toda prioridade</option><option value="1">Crítica</option><option value="2">Alta</option><option value="3">Média</option><option value="4">Baixa</option></select>
         <select id="fOri" aria-label="Origem"><option value="">Toda origem</option></select>
-        <label class="dtlab" style="font-size:11px;color:var(--mut)">Prazo de <input type="date" id="fDe" aria-label="Prazo de" style="margin-left:4px"></label>
-        <label class="dtlab" style="font-size:11px;color:var(--mut)">até <input type="date" id="fAte" aria-label="Prazo até" style="margin-left:4px"></label>
+        <div class="perbtns" id="perBtns" role="group" aria-label="Filtrar por vencimento" style="display:inline-flex;gap:4px">
+          <button type="button" class="btn sm" data-per="" aria-pressed="true">Todas</button>
+          <button type="button" class="btn sm" data-per="hoje" aria-pressed="false">Hoje</button>
+          <button type="button" class="btn sm" data-per="semana" aria-pressed="false">Essa semana</button>
+          <button type="button" class="btn sm" data-per="prox" aria-pressed="false">Semana que vem</button>
+          <button type="button" class="btn sm" data-per="atrasadas" aria-pressed="false">Atrasadas</button>
+        </div>
         <select id="fGroup" aria-label="Agrupar por"><option value="status">Agrupar: Status</option><option value="semana">Agrupar: Semana</option><option value="resp">Agrupar: Responsável</option><option value="cat">Agrupar: Categoria</option><option value="pri">Agrupar: Prioridade</option></select>
         <button class="btn sm" id="limpar">Limpar</button>
       </div>
@@ -358,7 +364,7 @@ const cor  = k => cat(k).cor;
    ========================================================================= */
 const S = {
   me:'u1', view:'board',
-  filtro:{q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''},
+  filtro:{q:'',cat:'',resp:'',pri:'',ori:'',periodo:''},
   fpainel:{resp:'',de:'',ate:''},
   ordem:{campo:'prazo',asc:true},
   verConcluidas:false,
@@ -421,7 +427,7 @@ function limparTudo(){
   const t = o => Object.assign({
     id:uid(), titulo:'', desc:'', cat:'BI', origem:'projeto', resp:'u1', solicitante:'', pri:3,
     status:'backlog', criada:h, inicio:null, prazo:null, est:2, gasto:0, check:[], rotinaId:null,
-    rotulos:[], repete:'',
+    rotulos:[], repete:'', emailLink:'',
     concluida:null, coment:[], hist:[]
   }, o);
 
@@ -528,14 +534,25 @@ function toast(msg, bad, acao){
 
 function filtra(list){
   const f = S.filtro, q = f.q.trim().toLowerCase();
+  const h = hoje();
+  const iniS = inicioSemana(), fimS = fimSemana();
+  const iniProx = addDias(iniS,7), fimProx = addDias(fimS,7);
+  const noPeriodo = t => {
+    if(!f.periodo) return true;
+    if(f.periodo==='atrasadas') return isAtrasada(t);
+    if(!t.prazo) return false;
+    if(f.periodo==='hoje')   return t.prazo===h;
+    if(f.periodo==='semana') return t.prazo>=iniS && t.prazo<=fimS;
+    if(f.periodo==='prox')   return t.prazo>=iniProx && t.prazo<=fimProx;
+    return true;
+  };
   return list.filter(t =>
     (!q      || (t.titulo+' '+t.desc+' '+(t.solicitante||'')).toLowerCase().includes(q)) &&
     (!f.cat  || t.cat===f.cat) &&
     (!f.resp || t.resp===f.resp) &&
     (!f.pri  || String(t.pri)===f.pri) &&
     (!f.ori  || t.origem===f.ori) &&
-    (!f.de   || (t.prazo && t.prazo>=f.de)) &&
-    (!f.ate  || (t.prazo && t.prazo<=f.ate))
+    noPeriodo(t)
   );
 }
 
@@ -567,6 +584,7 @@ function cardHTML(t){
       ${t.prazo?`<span class="due ${cls}">${cls==='late'?'⚠ ':''}${fmt(t.prazo)}</span>`:'<span class="due" style="color:var(--warn)">sem prazo</span>'}
       ${t.check.length?`<span class="rot" style="color:var(--mut)">☑ ${t.check.filter(x=>x.d).length}/${t.check.length}</span>`:''}
       ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}
+      ${t.emailLink?`<span class="rot" title="E-mail anexado">✉</span>`:''}
       ${avatar(t.resp,'margin-left:auto')}
     </span>
     <span class="move">
@@ -1003,7 +1021,9 @@ function abrirTask(id){
         <div class="f"><label for="f_repete">Repetição</label>
           <select id="f_repete">${Object.entries(REPETE).map(([k,n])=>`<option value="${k}" ${(t.repete||'')===k?'selected':''}>${n}</option>`).join('')}</select>
           <span class="log">Ao concluir, o sistema cria a próxima automaticamente.</span></div>
-        <div class="f"></div>
+        <div class="f"><label for="f_email">Link do e-mail</label>
+          <input id="f_email" type="url" value="${esc(t.emailLink||'')}" placeholder="Cole o link do e-mail (Outlook, SharePoint…)">
+          ${t.emailLink?`<a href="${esc(t.emailLink)}" target="_blank" rel="noopener" class="log" style="color:var(--eu)">✉ Abrir e-mail anexado</a>`:'<span class="log">Abra o e-mail no navegador e cole o link aqui.</span>'}</div>
       </div>
 
       <div class="f"><label>Checklist</label><div id="chk"></div>
@@ -1095,7 +1115,8 @@ function abrirTask(id){
       titulo:q('#f_tit').value.trim(), desc:q('#f_desc').value, cat:q('#f_cat').value,
       origem:q('#f_ori').value, resp:q('#f_resp').value, pri:+q('#f_pri').value,
       status:q('#f_st').value, prazo:q('#f_prazo').value||null, inicio:q('#f_inicio').value||null,
-      solicitante:q('#f_sol').value.trim(), rotulos:rots, repete:q('#f_repete').value||'', check:chk
+      solicitante:q('#f_sol').value.trim(), rotulos:rots, repete:q('#f_repete').value||'',
+      emailLink:(q('#f_email').value||'').trim(), check:chk
     };
     if(novo){
       const nova = Object.assign({id:uid(),criada:hoje(),rotinaId:null,concluida:null,coment:[],hist:[]}, o);
@@ -1425,12 +1446,18 @@ $('#fCat').onchange = e => { S.filtro.cat = e.target.value; render(); };
 $('#fResp').onchange= e => { S.filtro.resp= e.target.value; render(); };
 $('#fPri').onchange = e => { S.filtro.pri = e.target.value; render(); };
 $('#fOri').onchange = e => { S.filtro.ori = e.target.value; render(); };
-$('#fDe').onchange  = e => { S.filtro.de  = e.target.value; render(); };
-$('#fAte').onchange = e => { S.filtro.ate = e.target.value; render(); };
+$('#perBtns').addEventListener('click', e => {
+  const b = e.target.closest('[data-per]'); if(!b) return;
+  S.filtro.periodo = b.dataset.per;
+  $('#perBtns').querySelectorAll('[data-per]').forEach(x=>x.setAttribute('aria-pressed', x===b));
+  render();
+});
 $('#fGroup').onchange = e => { S.grupo = e.target.value; render(); };
 $('#limpar').onclick = () => {
-  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''};
-  ['#q','#fCat','#fResp','#fPri','#fOri','#fDe','#fAte'].forEach(s=>$(s)&&($(s).value='')); render();
+  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',periodo:''};
+  ['#q','#fCat','#fResp','#fPri','#fOri'].forEach(s=>$(s)&&($(s).value=''));
+  const pb=$('#perBtns'); if(pb) pb.querySelectorAll('[data-per]').forEach(x=>x.setAttribute('aria-pressed', x.dataset.per===''));
+  render();
 };
 $('#newTask').onclick = () => abrirTask(null);
 $('#ajuda').onclick   = abrirAjuda;
@@ -1454,8 +1481,8 @@ $('#zerar').onclick   = () => {
   if(!confirm('Recomeçar do zero apaga todas as tarefas e rotinas deste navegador e não pode ser desfeito. Deseja continuar?\n\nDica: use "Salvar cópia" antes, se quiser guardar o que já tem.')) return;
   limparTudo();
   S.users = S.users; S.tasks = []; S.rotinas = [];
-  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',de:'',ate:''};
-  ['#q','#fCat','#fResp','#fPri','#fOri','#fDe','#fAte'].forEach(s=>$(s)&&($(s).value=''));
+  S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',periodo:''};
+  ['#q','#fCat','#fResp','#fPri','#fOri'].forEach(s=>$(s)&&($(s).value=''));
   render(); toast('Tudo limpo. Comece criando uma tarefa.');
 };
 
@@ -1562,6 +1589,7 @@ function fromRow(r){
     resp:r.responsavel, solicitante:r.solicitante||'', pri:r.prioridade, status:r.status,
     criada:(r.criado_em||'').slice(0,10), inicio:r.data_inicio||null, prazo:r.prazo,
     rotulos:Array.isArray(r.rotulos)?r.rotulos:[], repete:r.repete||'', repeteOrigem:r.repete_origem||null,
+    emailLink:r.email_link||'',
     check:(r.checklist||[]).sort((a,b)=>a.ordem-b.ordem).map(c=>({id:c.id,t:c.texto,d:c.feito})),
     rotinaId:r.rotina_id, concluida:r.concluido_em,
     coment:(r.comentarios||[]).map(c=>({autor:c.autor,texto:c.texto,quando:(c.criado_em||'').slice(0,10)})), hist:[]};
@@ -1573,6 +1601,7 @@ function toRow(t){
   return {titulo:t.titulo, descricao:t.desc, categoria_id:t.cat, origem:t.origem, responsavel:resp,
     solicitante:t.solicitante, prioridade:t.pri, status:t.status, prazo:t.prazo||null, data_inicio:t.inicio||null,
     rotulos:t.rotulos||[], repete:t.repete||'', repete_origem:ehUUID(t.repeteOrigem)?t.repeteOrigem:null,
+    email_link:t.emailLink||'',
     concluido_em:t.concluida||null, criado_por:criador};
 }
 async function sincronizarChecklist(t){
