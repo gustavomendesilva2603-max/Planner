@@ -261,6 +261,7 @@ tbody tr{cursor:pointer}
     <div class="wrap" id="view"></div>
   </main>
 </div>
+<div id="avisoRede" class="hide" style="position:fixed;bottom:0;left:0;right:0;background:var(--warn);color:#0B1418;font-size:12.5px;font-weight:600;text-align:center;padding:8px 16px;z-index:300"></div>
 
 <div class="ov" id="ov" role="dialog" aria-modal="true" aria-labelledby="shTitle"><div class="sheet" id="sheet"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -419,6 +420,66 @@ function carregar(){
 }
 function limparTudo(){
   if(temStorage){ try{ localStorage.removeItem(CHAVE); }catch(e){} }
+}
+
+/* ---------- RASCUNHO automático do modal (não perder o que digitou) ---------- */
+const RASC = 'central-rascunho-';
+function salvarRascunho(id, dados){
+  if(!temStorage) return;
+  try{ localStorage.setItem(RASC+(id||'novo'), JSON.stringify({dados, quando:Date.now()})); }catch(e){}
+}
+function lerRascunho(id){
+  if(!temStorage) return null;
+  try{ const r=localStorage.getItem(RASC+(id||'novo')); return r?JSON.parse(r).dados:null; }catch(e){ return null; }
+}
+function limparRascunho(id){
+  if(!temStorage) return;
+  try{ localStorage.removeItem(RASC+(id||'novo')); }catch(e){}
+}
+
+/* ---------- FILA OFFLINE — se a rede cair, guarda e reenvia quando voltar ---------- */
+const FILA = 'central-fila-offline';
+function lerFila(){ if(!temStorage) return []; try{ return JSON.parse(localStorage.getItem(FILA)||'[]'); }catch(e){ return []; } }
+function gravarFila(f){ if(!temStorage) return; try{ localStorage.setItem(FILA, JSON.stringify(f)); }catch(e){} }
+function enfileirar(op){ const f=lerFila(); f.push(op); gravarFila(f); atualizarAvisoRede(); }
+function ehErroRede(e){
+  const m=(e&&(e.message||e.msg)||'').toLowerCase();
+  return !navigator.onLine || m.includes('failed to fetch') || m.includes('network') || m.includes('fetch');
+}
+// tenta reenviar tudo que ficou pendente; só remove da fila o que deu certo
+async function processarFila(){
+  if(!ONLINE || !navigator.onLine) return;
+  let f = lerFila(); if(!f.length) return;
+  const restantes = [];
+  for(const op of f){
+    try{
+      if(op.tipo==='salvar')   await DB.salvarTask(op.task, op.novo);
+      else if(op.tipo==='mover') await DB.moverTask(op.id, op.status, op.concluida);
+      else if(op.tipo==='apagar') await DB.apagarTask(op.id);
+      else if(op.tipo==='comentar') await DB.comentar(op.tarefa_id, op.autor, op.texto);
+    }catch(e){
+      if(ehErroRede(e)){ restantes.push(op); }   // ainda sem rede: mantém
+      // se for outro erro (dado inválido), descarta pra não travar a fila pra sempre
+    }
+  }
+  gravarFila(restantes);
+  atualizarAvisoRede();
+  if(f.length && !restantes.length){ toast('Tudo que estava pendente foi salvo no banco.'); await recarregar(); }
+}
+function atualizarAvisoRede(){
+  const el = document.querySelector('#avisoRede'); if(!el) return;
+  const n = lerFila().length;
+  const off = !navigator.onLine;
+  if(off || n){
+    el.classList.remove('hide');
+    el.innerHTML = off
+      ? `⚠ Sem conexão. Suas alterações estão sendo guardadas${n?` (${n} pendente${n>1?'s':''})`:''} e vão para o banco quando a internet voltar.`
+      : `↻ Reenviando ${n} alteração${n>1?'ões':''} pendente${n>1?'s':''}…`;
+  } else { el.classList.add('hide'); }
+}
+if(typeof window!=='undefined'){
+  window.addEventListener('online',  ()=>{ atualizarAvisoRede(); processarFila(); });
+  window.addEventListener('offline', ()=>{ atualizarAvisoRede(); toast('Você ficou sem conexão. Pode continuar — salvo quando voltar.', true); });
 }
 
 /* ---------- dados de exemplo ---------- */
@@ -1051,6 +1112,35 @@ function abrirTask(id){
   abrir();
 
   const q = s => sheet.querySelector(s);
+
+  // RASCUNHO: restaura o que estava sendo digitado, se houver
+  const rasc = lerRascunho(id);
+  if(rasc){
+    const campos = ['f_tit','f_desc','f_sol','f_email','f_prazo','f_inicio'];
+    const temAlgo = campos.some(c=>rasc[c] && rasc[c]!=='');
+    if(temAlgo){
+      campos.forEach(c=>{ if(rasc[c]!=null && q('#'+c)) q('#'+c).value = rasc[c]; });
+      ['f_cat','f_ori','f_resp','f_pri','f_st','f_repete'].forEach(c=>{ if(rasc[c]!=null && q('#'+c)) q('#'+c).value = rasc[c]; });
+      toast('Rascunho recuperado do que você estava digitando.');
+    }
+  }
+  let rascT;
+  const guardaRascunho = () => {
+    clearTimeout(rascT);
+    rascT = setTimeout(()=>{
+      salvarRascunho(id, {
+        f_tit:q('#f_tit').value, f_desc:q('#f_desc').value, f_sol:q('#f_sol').value,
+        f_email:q('#f_email').value, f_prazo:q('#f_prazo').value, f_inicio:q('#f_inicio').value,
+        f_cat:q('#f_cat').value, f_ori:q('#f_ori').value, f_resp:q('#f_resp').value,
+        f_pri:q('#f_pri').value, f_st:q('#f_st').value, f_repete:q('#f_repete').value
+      });
+    }, 400);
+  };
+  sheet.querySelectorAll('input,select,textarea').forEach(el=>{
+    el.addEventListener('input', guardaRascunho);
+    el.addEventListener('change', guardaRascunho);
+  });
+
   const pintarChk = () => {
     q('#chk').innerHTML = chk.map((c,i)=>`<div class="line"><input type="checkbox" data-i="${i}" ${c.d?'checked':''} aria-label="${esc(c.t)}">
       <span class="${c.d?'done':''}" style="flex:1">${esc(c.t)}</span>
@@ -1065,12 +1155,18 @@ function abrirTask(id){
   q('#addChk').onclick = addChk;
   q('#novoChk').onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); addChk(); } };
 
+  // comentários pendentes desta sessão do modal (entram no save)
+  const comentPend = [];
+  const pintarCm = () => {
+    const base = (t.coment||[]).concat(comentPend.map(c=>({autor:S.me,texto:c,quando:hoje(),pend:true})));
+    q('#cms').innerHTML = base.length ? base.map(c=>`<div class="line">${avatar(c.autor)}
+      <span style="flex:1">${esc(c.texto)}</span>${c.pend?'<span class="log" style="color:var(--warn)">a salvar</span>':`<span class="log">${fmt(c.quando)}</span>`}</div>`).join('')
+      : '<div style="color:var(--mut);font-size:12px;padding:4px 0">Sem comentários.</div>';
+  };
   const comentar = () => {
     const v=q('#novoCm').value.trim(); if(!v) return;
-    if(novo){ toast('Salve a tarefa antes de comentar.', true); return; }
-    t.coment.push({autor:S.me,texto:v,quando:hoje()}); q('#novoCm').value='';
-    if(ONLINE){ DB.comentar(t.id, user(S.me).id, v).catch(e=>toast('Erro no comentário: '+(e.message||e),true)); }
-    abrirTask(t.id); toast('Comentário adicionado.');
+    comentPend.push(v); q('#novoCm').value=''; pintarCm(); q('#novoCm').focus();
+    toast(novo ? 'Comentário será salvo junto com a tarefa.' : 'Comentário adicionado. Clique em Salvar para confirmar.');
   };
   q('#addCm').onclick = comentar;
   q('#novoCm').onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); comentar(); } };
@@ -1121,8 +1217,12 @@ function abrirTask(id){
     if(novo){
       const nova = Object.assign({id:uid(),criada:hoje(),rotinaId:null,concluida:null,coment:[],hist:[]}, o);
       nova.concluida = nova.status==='concluido' ? hoje() : null;
+      comentPend.forEach(txt=>nova.coment.push({autor:S.me,texto:txt,quando:hoje()}));
       S.tasks.push(nova);
-      if(ONLINE){ DB.salvarTask(nova, true).then(recarregar).catch(e=>toast('Erro ao salvar: '+(e.message||e),true)); }
+      if(ONLINE){ DB.salvarTask(nova, true)
+        .then(()=>Promise.all(comentPend.map(txt=>DB.comentar(nova.id, user(S.me).id, txt).catch(()=>{}))))
+        .then(recarregar)
+        .catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'salvar',task:nova,novo:true}); toast('Sem conexão: tarefa guardada, vai pro banco quando a internet voltar.',true); } else toast('Erro ao salvar: '+(e.message||e),true); }); }
       toast('Tarefa criada.');
     } else {
       ['status','resp','pri','prazo'].forEach(k=>{
@@ -1133,9 +1233,14 @@ function abrirTask(id){
       });
       Object.assign(t, o);
       t.concluida = t.status==='concluido' ? (t.concluida || hoje()) : null;
-      if(ONLINE){ DB.salvarTask(t, false).then(recarregar).catch(e=>toast('Erro ao salvar: '+(e.message||e),true)); }
+      comentPend.forEach(txt=>t.coment.push({autor:S.me,texto:txt,quando:hoje()}));
+      if(ONLINE){ DB.salvarTask(t, false)
+        .then(()=>Promise.all(comentPend.map(txt=>DB.comentar(t.id, user(S.me).id, txt).catch(()=>{}))))
+        .then(recarregar)
+        .catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'salvar',task:t,novo:false}); toast('Sem conexão: alteração guardada, vai pro banco quando a internet voltar.',true); } else toast('Erro ao salvar: '+(e.message||e),true); }); }
       toast('Tarefa salva.');
     }
+    limparRascunho(id);   // salvou de verdade: descarta o rascunho automático
     fechar(); render();
   };
 }
@@ -1312,7 +1417,7 @@ function mover(id, novoSt){
   }
   render();
   if(ONLINE){
-    DB.moverTask(id, t.status, t.concluida).catch(e=>toast('Erro ao mover: '+(e.message||e),true));
+    DB.moverTask(id, t.status, t.concluida).catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'mover',id,status:t.status,concluida:t.concluida}); } else toast('Erro ao mover: '+(e.message||e),true); });
     if(criada) DB.salvarTask(criada, true).then(recarregar).catch(e=>toast('Erro ao repetir: '+(e.message||e),true));
   }
   const card = $('#view').querySelector(`.card[data-id="${id}"]`);
@@ -1707,7 +1812,7 @@ render();
 if(ONLINE){
   // modo banco: mostra login e só entra com sessão válida
   sb.auth.getSession().then(({data})=>{
-    if(data.session){ iniciarApp(data.session.user); }
+    if(data.session){ iniciarApp(data.session.user).then(()=>{ atualizarAvisoRede(); processarFila(); }); }
     else { telaLogin(); }
   }).catch(()=> telaLogin());
 } else {
