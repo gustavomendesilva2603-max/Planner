@@ -74,6 +74,13 @@ main{overflow:auto;display:flex;flex-direction:column}
 .board{display:grid;grid-template-columns:repeat(4,minmax(230px,1fr));gap:14px;align-items:start}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-height:140px}
 .col>header{padding:11px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.colhead{cursor:pointer;user-select:none}
+.colhead:hover{background:var(--panel2)}
+.col .seta{font-size:11px;color:var(--mut);transition:transform .15s ease;display:inline-block}
+.col.recolhida .seta{transform:rotate(-90deg)}
+.col.recolhida{min-height:0}
+.col.recolhida .body{display:none}
+.col.recolhida>header{border-bottom:none}
 .col>header b{font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 .col>header .n{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut)}
 .col>header .n.over{color:var(--bad)}
@@ -365,6 +372,7 @@ const cor  = k => cat(k).cor;
    ========================================================================= */
 const S = {
   me:'u1', view:'board',
+  colsRecolhidas:['concluido'],   // Concluídas começa recolhida; reinicia a cada carga
   filtro:{q:'',cat:'',resp:'',pri:'',ori:'',periodo:''},
   fpainel:{resp:'',de:'',ate:''},
   ordem:{campo:'prazo',asc:true},
@@ -374,7 +382,7 @@ const S = {
     {id:'u2',nome:'Francine',  ini:'FR',papel:'analista',   cargo:'Assistente de B.I',  cor:'#2DB8A3',capacidade:7},
     {id:'u3',nome:'Gustavo',   ini:'GU',papel:'admin',      cargo:'Analista de B.I',    cor:'#3B9EFF',capacidade:8},
     {id:'u4',nome:'Evellyn',   ini:'EV',papel:'analista',   cargo:'Auxiliar de ADM',    cor:'#F5934A',capacidade:8},
-    {id:'u5',nome:'Lucas Nadú',ini:'LN',papel:'analista',   cargo:'Assistente de ADM',  cor:'#E8637E',capacidade:7}
+    {id:'u5',nome:'Lucas Nadu',ini:'LN',papel:'analista',   cargo:'Assistente de ADM',  cor:'#E8637E',capacidade:7}
   ],
   tasks:[], rotinas:[]
 };
@@ -716,8 +724,10 @@ function vBoard(){
       }
       list.sort(ordenaPadrao);
       const over = s.k==='andamento' && estourouWip.length;
-      return `<section class="col" data-st="${s.k}" aria-label="${s.n}">
-        <header><b>${s.n}</b><span class="n ${over?'over':''}">${list.length}</span></header>
+      const recolhida = S.colsRecolhidas.includes(s.k);
+      return `<section class="col ${recolhida?'recolhida':''}" data-st="${s.k}" aria-label="${s.n}">
+        <header class="colhead" data-toggle="${s.k}" role="button" tabindex="0" aria-expanded="${!recolhida}" title="${recolhida?'Expandir':'Recolher'} coluna">
+          <span class="seta">▾</span><b>${s.n}</b><span class="n ${over?'over':''}">${list.length}</span></header>
         <div class="body">${list.map(cardHTML).join('') || '<div class="empty">Nada aqui.</div>'}${nota}</div>
       </section>`;
     }).join('')}</div>
@@ -1142,12 +1152,38 @@ function abrirTask(id){
   });
 
   const pintarChk = () => {
-    q('#chk').innerHTML = chk.map((c,i)=>`<div class="line"><input type="checkbox" data-i="${i}" ${c.d?'checked':''} aria-label="${esc(c.t)}">
-      <span class="${c.d?'done':''}" style="flex:1">${esc(c.t)}</span>
-      <button class="btn sm danger" data-rm="${i}" aria-label="Remover item">✕</button></div>`).join('')
+    q('#chk').innerHTML = chk.map((c,i)=>`<div class="line">
+      <input type="checkbox" data-i="${i}" ${c.d?'checked':''} aria-label="${esc(c.t)}">
+      <span class="chktxt ${c.d?'done':''}" data-edit="${i}" style="flex:1;cursor:text;border-radius:5px;padding:2px 5px" title="Clique para editar">${esc(c.t)}</span>
+      <button class="btn sm" data-ed="${i}" aria-label="Editar item" title="Editar">✎</button>
+      <button class="btn sm danger" data-rm="${i}" aria-label="Remover item" title="Remover">✕</button></div>`).join('')
       || '<div style="color:var(--mut);font-size:12px;padding:4px 0">Sem itens.</div>';
-    q('#chk').querySelectorAll('input').forEach(i=>i.onchange=()=>{chk[+i.dataset.i].d=i.checked;pintarChk();});
+    q('#chk').querySelectorAll('input[type=checkbox]').forEach(i=>i.onchange=()=>{chk[+i.dataset.i].d=i.checked;pintarChk();});
     q('#chk').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{chk.splice(+b.dataset.rm,1);pintarChk();});
+    // editar item: transforma o texto em campo editável
+    const editar = i => {
+      const span = q('#chk').querySelector(`[data-edit="${i}"]`); if(!span) return;
+      const valAntes = chk[i].t;
+      span.contentEditable = 'true';
+      span.style.background = 'var(--panel2)';
+      span.style.boxShadow = 'inset 0 0 0 1px var(--line)';
+      span.focus();
+      // seleciona todo o texto
+      const rng = document.createRange(); rng.selectNodeContents(span);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rng);
+      const salvar = () => {
+        const novo = span.textContent.trim();
+        chk[i].t = novo || valAntes;   // não deixa ficar vazio
+        pintarChk();
+      };
+      span.onblur = salvar;
+      span.onkeydown = e => {
+        if(e.key==='Enter'){ e.preventDefault(); span.blur(); }
+        if(e.key==='Escape'){ e.preventDefault(); span.textContent = valAntes; span.blur(); }
+      };
+    };
+    q('#chk').querySelectorAll('[data-ed]').forEach(b=>b.onclick=()=>editar(+b.dataset.ed));
+    q('#chk').querySelectorAll('[data-edit]').forEach(s=>s.onclick=()=>editar(+s.dataset.edit));
   };
   pintarChk();
 
@@ -1433,6 +1469,16 @@ function mover(id, novoSt){
 
 function ligarBoard(){
   let arrastando = null;
+  // recolher/expandir coluna pela setinha do cabeçalho
+  const toggleCol = k => {
+    const i = S.colsRecolhidas.indexOf(k);
+    if(i>=0) S.colsRecolhidas.splice(i,1); else S.colsRecolhidas.push(k);
+    render();
+  };
+  $('#view').querySelectorAll('.colhead[data-toggle]').forEach(h=>{
+    h.addEventListener('click', ()=>toggleCol(h.dataset.toggle));
+    h.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleCol(h.dataset.toggle); } });
+  });
   $('#view').querySelectorAll('.card').forEach(c=>{
     c.addEventListener('dragstart', e => { arrastando = c.dataset.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', c.dataset.id); });
     c.addEventListener('dragend',   () => { c.classList.remove('dragging'); arrastando=null; $('#view').querySelectorAll('.col').forEach(x=>x.classList.remove('drop')); });
