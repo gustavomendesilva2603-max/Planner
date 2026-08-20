@@ -75,6 +75,24 @@ main{overflow:auto;display:flex;flex-direction:column}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;min-height:140px}
 .col>header{padding:11px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
 .colhead{cursor:pointer;user-select:none}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.calhead{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);text-align:center;padding:4px 0}
+.calcel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:96px;padding:6px;display:flex;flex-direction:column;gap:4px}
+.calcel.vazia{background:transparent;border-color:transparent}
+.calcel.hoje{border-color:var(--eu);box-shadow:inset 0 0 0 1px var(--eu)}
+.caldia{font-size:12px;font-weight:600;color:var(--mut)}
+.calcel.hoje .caldia{color:var(--eu)}
+.calitems{display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.calitem{font-size:10.5px;padding:2px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;border-left:3px solid}
+.calitem.feita{background:rgba(45,212,167,.14);border-color:var(--ok);color:var(--tx)}
+.calitem.atrasada{background:rgba(240,87,122,.15);border-color:var(--bad);color:var(--tx)}
+.calitem.pendente{background:var(--panel2);border-color:var(--mut2);color:var(--mut)}
+.calmais{font-size:10px;color:var(--mut);padding:1px 5px}
+.calbadge{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:3px}
+.calbadge.feita{background:var(--ok)}
+.calbadge.atrasada{background:var(--bad)}
+.calbadge.pendente{background:var(--mut2)}
+@media(max-width:640px){.calcel{min-height:70px}.calitem{font-size:9px}}
 .colhead:hover{background:var(--panel2)}
 .col .seta{font-size:11px;color:var(--mut);transition:transform .15s ease;display:inline-block}
 .col.recolhida .seta{transform:rotate(-90deg)}
@@ -218,6 +236,7 @@ tbody tr{cursor:pointer}
       <button data-v="minhas">Minhas tarefas<span class="badge" id="nm"></span></button>
       <button data-v="lista">Lista completa</button>
       <button data-v="painel">Coordenação<span class="badge" id="na"></span></button>
+      <button data-v="calendario">Calendário</button>
     </nav>
 
     <div class="catbox">
@@ -336,23 +355,30 @@ const ROTULOS = {
 
 // tipos de repetição dentro da própria tarefa
 const REPETE = {
-  '':        'Não repete',
-  diaria:    'Todo dia',
-  uteis:     'Dias úteis (seg–sex)',
-  semanal:   'Toda semana',
-  mensal:    'Todo mês',
-  anual:     'Todo ano'
+  '':          'Não repete',
+  diaria:      'Todo dia',
+  uteis:       'Dias úteis (seg–sex)',
+  semanal:     'Toda semana',
+  quinzenal:   'A cada 15 dias',
+  mensal:      'Todo mês',
+  trimestral:  'A cada 3 meses',
+  semestral:   'A cada 6 meses',
+  anual:       'Todo ano'
 };
 // calcula a data da PRÓXIMA ocorrência a partir de uma data base
 function proximaData(base, tipo){
   if(!base || !tipo) return null;
   let d = base;
+  const somaMeses = n => { const x=new Date(d+'T12:00'); x.setMonth(x.getMonth()+n); return x.toISOString().slice(0,10); };
   switch(tipo){
-    case 'diaria':  return addDias(d,1);
-    case 'uteis':   { d=addDias(d,1); while(dow(d)===0||dow(d)===6) d=addDias(d,1); return d; }
-    case 'semanal': return addDias(d,7);
-    case 'mensal':  { const x=new Date(d+'T12:00'); x.setMonth(x.getMonth()+1); return x.toISOString().slice(0,10); }
-    case 'anual':   { const x=new Date(d+'T12:00'); x.setFullYear(x.getFullYear()+1); return x.toISOString().slice(0,10); }
+    case 'diaria':     return addDias(d,1);
+    case 'uteis':      { d=addDias(d,1); while(dow(d)===0||dow(d)===6) d=addDias(d,1); return d; }
+    case 'semanal':    return addDias(d,7);
+    case 'quinzenal':  return addDias(d,15);
+    case 'mensal':     return somaMeses(1);
+    case 'trimestral': return somaMeses(3);
+    case 'semestral':  return somaMeses(6);
+    case 'anual':      return somaMeses(12);
     default: return null;
   }
 }
@@ -375,6 +401,7 @@ const S = {
   colsRecolhidas:['concluido'],   // Concluídas começa recolhida; reinicia a cada carga
   filtro:{q:'',cat:'',resp:'',pri:'',ori:'',periodo:''},
   fpainel:{resp:'',de:'',ate:''},
+  cal:{ano:null, mes:null, resp:''},
   ordem:{campo:'prazo',asc:true},
   verConcluidas:false,
   users:[
@@ -878,6 +905,98 @@ function vRotinas(){
     tr.onclick = () => abrirRotina(tr.dataset.rot);
     tr.onkeydown = e => { if(e.key==='Enter'){e.preventDefault();abrirRotina(tr.dataset.rot);} };
   });
+}
+
+/* ---------- CALENDÁRIO MENSAL ---------- */
+function vCalendario(){
+  const h = hoje();
+  // inicializa mês/ano com o atual, na primeira vez
+  if(S.cal.ano==null){ const d=new Date(h+'T12:00'); S.cal.ano=d.getFullYear(); S.cal.mes=d.getMonth(); }
+  const ano=S.cal.ano, mes=S.cal.mes;
+  const nomeMes=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes];
+
+  // base: tarefas com prazo, respeitando permissão e filtro de pessoa
+  let base = S.tasks.filter(t=>t.prazo);
+  if(!ehGestor()) base = base.filter(t=>t.resp===S.me);
+  if(S.cal.resp) base = base.filter(t=>t.resp===S.cal.resp);
+
+  // agrupa por dia (só do mês exibido)
+  const porDia = {};
+  base.forEach(t=>{
+    const d=new Date(t.prazo+'T12:00');
+    if(d.getFullYear()===ano && d.getMonth()===mes){
+      const dia=d.getDate();
+      (porDia[dia]=porDia[dia]||[]).push(t);
+    }
+  });
+
+  // status de cor de uma tarefa
+  const corTask = t => {
+    if(t.status==='concluido') return 'feita';           // verde
+    if(t.prazo < h) return 'atrasada';                   // vermelho (venceu e não fez)
+    return 'pendente';                                   // neutro (ainda não venceu)
+  };
+
+  // monta a grade do mês
+  const primeiro = new Date(ano,mes,1);
+  const diaSemInicio = primeiro.getDay();                // 0=Dom
+  const diasNoMes = new Date(ano,mes+1,0).getDate();
+  const cels = [];
+  for(let i=0;i<diaSemInicio;i++) cels.push(null);       // espaços antes do dia 1
+  for(let d=1;d<=diasNoMes;d++) cels.push(d);
+  while(cels.length%7!==0) cels.push(null);              // completa a última linha
+
+  const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  // contadores do mês
+  const todasMes = Object.values(porDia).flat();
+  const nFeitas = todasMes.filter(t=>t.status==='concluido').length;
+  const nAtras  = todasMes.filter(t=>t.status!=='concluido' && t.prazo<h).length;
+  const nPend   = todasMes.filter(t=>t.status!=='concluido' && t.prazo>=h).length;
+
+  $('#view').innerHTML = `
+  <div class="panel" style="padding:12px 16px;margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <button class="btn sm" id="calPrev">‹ Mês anterior</button>
+    <b style="font-size:16px;min-width:170px;text-align:center">${nomeMes} ${ano}</b>
+    <button class="btn sm" id="calNext">Próximo mês ›</button>
+    <button class="btn sm" id="calHoje">Hoje</button>
+    <span style="flex:1"></span>
+    <select id="calResp" style="background:var(--panel2);border:1px solid var(--line);padding:7px 10px;border-radius:8px">
+      <option value="">Toda a equipe</option>
+      ${S.users.map(u=>`<option value="${u.id}" ${S.cal.resp===u.id?'selected':''}>${esc(u.nome)}</option>`).join('')}
+    </select>
+  </div>
+
+  <div class="panel" style="padding:10px 14px;margin-bottom:14px;display:flex;gap:18px;font-size:12.5px;flex-wrap:wrap">
+    <span><span class="calbadge feita"></span> Concluídas: <b>${nFeitas}</b></span>
+    <span><span class="calbadge atrasada"></span> Atrasadas / não feitas: <b>${nAtras}</b></span>
+    <span><span class="calbadge pendente"></span> A vencer: <b>${nPend}</b></span>
+  </div>
+
+  <div class="calgrid">
+    ${DOW.map(d=>`<div class="calhead">${d}</div>`).join('')}
+    ${cels.map(d=>{
+      if(d==null) return '<div class="calcel vazia"></div>';
+      const iso = `${ano}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const hoje2 = iso===h ? 'hoje' : '';
+      const items = (porDia[d]||[]).sort((a,b)=>String(a.pri).localeCompare(String(b.pri)));
+      return `<div class="calcel ${hoje2}">
+        <div class="caldia">${d}</div>
+        <div class="calitems">
+          ${items.slice(0,4).map(t=>`<div class="calitem ${corTask(t)}" data-tid="${t.id}" title="${esc(t.titulo)} · ${esc(user(t.resp).nome)}">${esc(t.titulo)}</div>`).join('')}
+          ${items.length>4?`<div class="calmais">+${items.length-4} mais</div>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+  <p class="hint" style="margin-top:12px">Cada tarefa aparece no dia do seu prazo. <b style="color:var(--ok)">Verde</b> = concluída · <b style="color:var(--bad)">Vermelho</b> = venceu e não foi feita · cinza = ainda a vencer. Clique numa tarefa para abrir.</p>`;
+
+  // navegação
+  $('#calPrev').onclick = ()=>{ let m=mes-1,a=ano; if(m<0){m=11;a--;} S.cal.mes=m; S.cal.ano=a; render(); };
+  $('#calNext').onclick = ()=>{ let m=mes+1,a=ano; if(m>11){m=0;a++;} S.cal.mes=m; S.cal.ano=a; render(); };
+  $('#calHoje').onclick = ()=>{ const d=new Date(hoje()+'T12:00'); S.cal.ano=d.getFullYear(); S.cal.mes=d.getMonth(); render(); };
+  $('#calResp').onchange = e=>{ S.cal.resp=e.target.value; render(); };
+  $('#view').querySelectorAll('[data-tid]').forEach(el=>el.onclick=()=>abrirTask(el.dataset.tid));
 }
 
 /* ---------- PAINEL DA COORDENAÇÃO ---------- */
@@ -1524,13 +1643,13 @@ function ligarLinhas(){
 /* =========================================================================
    8. RENDER + BOOT
    ========================================================================= */
-const TITULOS = {board:'Quadro', minhas:'Minhas tarefas', lista:'Lista completa', painel:'Painel da coordenação'};
-const VIEWS   = {board:vBoard, minhas:vMinhas, lista:vLista, painel:vPainel};
+const TITULOS = {board:'Quadro', minhas:'Minhas tarefas', lista:'Lista completa', painel:'Painel da coordenação', calendario:'Calendário'};
+const VIEWS   = {board:vBoard, minhas:vMinhas, lista:vLista, painel:vPainel, calendario:vCalendario};
 
 function render(){
   if(S.view==='painel' && !ehGestor()) S.view='board';   // trava de segurança
   $('#title').textContent = TITULOS[S.view] || 'Quadro';
-  const semFiltro = S.view==='painel' || S.view==='rotinas';
+  const semFiltro = S.view==='painel' || S.view==='rotinas' || S.view==='calendario';
   $('#filters').classList.toggle('hide', semFiltro);
   (VIEWS[S.view] || vBoard)();
   const abertas = S.tasks.filter(ativa);
