@@ -1398,8 +1398,16 @@ function abrirTask(id){
   if(!novo) q('#del').onclick = () => {
     const idx = S.tasks.indexOf(t);
     S.tasks = S.tasks.filter(x=>x.id!==t.id); fechar(); render();
-    if(ONLINE){ DB.apagarTask(t.id).catch(e=>toast('Erro ao excluir: '+(e.message||e),true)); }
-    toast('Tarefa excluída.', true, () => { S.tasks.splice(Math.min(idx,S.tasks.length),0,t); render(); });
+    if(ONLINE){
+      DB.apagarTask(t.id)
+        .catch(e=>{
+          if(ehErroRede(e)){ enfileirar({tipo:'apagar',id:t.id}); toast('Sem conexão: exclusão será aplicada quando a internet voltar.',true); return; }
+          // banco recusou (ex: permissão): repõe a tarefa na tela e avisa
+          if(!S.tasks.some(x=>x.id===t.id)){ S.tasks.splice(Math.min(idx,S.tasks.length),0,t); render(); }
+          toast('Não foi possível excluir: '+(e.message||e), true);
+        });
+    }
+    toast('Tarefa excluída.', true, () => { if(!S.tasks.some(x=>x.id===t.id)){ S.tasks.splice(Math.min(idx,S.tasks.length),0,t); render(); } });
   };
 
   q('#save').onclick = () => {
@@ -1435,8 +1443,10 @@ function abrirTask(id){
           t.hist.push({campo:k==='resp'?'responsável':k==='pri'?'prioridade':k,de:rot(t[k]),para:rot(o[k]),quem:S.me,quando:hoje()});
         }
       });
+      const estavaConcluido = t.status==='concluido';
       Object.assign(t, o);
       t.concluida = t.status==='concluido' ? (t.concluida || hoje()) : null;
+      if(t.status==='concluido' && !estavaConcluido) festejar();  // 🎉
       comentPend.forEach(txt=>t.coment.push({autor:S.me,texto:txt,quando:hoje()}));
 
       // se a regra de repetição mudou, refaz as ocorrências futuras da série
@@ -1636,6 +1646,49 @@ function abrirAjuda(){
 /* =========================================================================
    7. INTERAÇÕES DO QUADRO
    ========================================================================= */
+function festejar(){
+  try{
+    let cv = document.getElementById('confeteCv');
+    if(!cv){
+      cv = document.createElement('canvas'); cv.id='confeteCv';
+      cv.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999';
+      document.body.appendChild(cv);
+    }
+    const ctx = cv.getContext('2d');
+    const W = cv.width = window.innerWidth, H = cv.height = window.innerHeight;
+    const cores = ['#7C6FF0','#2DB8A3','#3B9EFF','#F5934A','#E8637E','#F5C518','#4ADE80'];
+    const N = 140;
+    const peças = Array.from({length:N},()=>({
+      x: W/2 + (Math.random()-0.5)*120,
+      y: H*0.35 + (Math.random()-0.5)*60,
+      vx: (Math.random()-0.5)*14,
+      vy: Math.random()*-15-4,
+      g: 0.35 + Math.random()*0.2,
+      s: 5 + Math.random()*7,
+      cor: cores[(Math.random()*cores.length)|0],
+      rot: Math.random()*Math.PI, vr: (Math.random()-0.5)*0.3,
+      forma: Math.random()<0.5?'r':'c'
+    }));
+    let frame = 0;
+    const tick = () => {
+      ctx.clearRect(0,0,W,H);
+      let vivas = 0;
+      peças.forEach(p=>{
+        p.vy += p.g; p.x += p.vx; p.y += p.vy; p.vx *= 0.99; p.rot += p.vr;
+        if(p.y < H+20){ vivas++; }
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.cor;
+        if(p.forma==='r'){ ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6); }
+        else { ctx.beginPath(); ctx.arc(0,0,p.s/2,0,7); ctx.fill(); }
+        ctx.restore();
+      });
+      frame++;
+      if(vivas>0 && frame<200){ requestAnimationFrame(tick); }
+      else { ctx.clearRect(0,0,W,H); }
+    };
+    tick();
+  }catch(e){ /* confete nunca pode quebrar o app */ }
+}
+
 function mover(id, novoSt){
   const t = S.tasks.find(x=>x.id===id); if(!t || t.status===novoSt) return;
   const stAntes = t.status, conclAntes = t.concluida;
@@ -1643,6 +1696,7 @@ function mover(id, novoSt){
   t.hist.push({campo:'status', de:stName(t.status), para:stName(novoSt), quem:S.me, quando:hoje()});
   t.status = novoSt;
   t.concluida = novoSt==='concluido' ? (t.concluida || hoje()) : null;
+  if(novoSt==='concluido' && stAntes!=='concluido') festejar();  // 🎉 confete
 
   // recorrência: ao concluir uma tarefa que repete, cria a próxima ocorrência
   let criada = null;
@@ -1925,7 +1979,11 @@ const DB = {
     const {error} = await sb.from('tarefas').update({status, concluido_em: concluida}).eq('id', id);
     if(error) throw error;
   },
-  async apagarTask(id){ const {error} = await sb.from('tarefas').delete().eq('id', id); if(error) throw error; },
+  async apagarTask(id){
+    const { error, count } = await sb.from('tarefas').delete({ count:'exact' }).eq('id', id);
+    if(error) throw error;
+    if(count===0) throw new Error('Exclusão bloqueada pelo banco (permissão). Nada foi apagado.');
+  },
   async comentar(tarefa_id, autor, texto){
     const {error} = await sb.from('comentarios').insert({tarefa_id, autor, texto}); if(error) throw error;
   },
