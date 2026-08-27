@@ -1424,6 +1424,11 @@ function abrirTask(id){
         .catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'salvar',task:nova,novo:true}); toast('Sem conexão: tarefa guardada, vai pro banco quando a internet voltar.',true); } else toast('Erro ao salvar: '+(e.message||e),true); }); }
       toast('Tarefa criada.');
     } else {
+      // detecta se a REGRA de repetição mudou (tipo, dia da semana ou dia do mês)
+      const regraAntes = JSON.stringify([t.repete||'', t.repeteDiaSem??null, t.repeteDiaMes??null]);
+      const regraDepois = JSON.stringify([o.repete||'', o.repeteDiaSem??null, o.repeteDiaMes??null]);
+      const regraMudou = regraAntes !== regraDepois;
+
       ['status','resp','pri','prazo'].forEach(k=>{
         if(String(t[k]) !== String(o[k])){
           const rot = k==='status' ? stName : k==='resp' ? (v=>user(v).nome) : k==='pri' ? (v=>pri(v).n) : (v=>v||'sem prazo');
@@ -1433,11 +1438,52 @@ function abrirTask(id){
       Object.assign(t, o);
       t.concluida = t.status==='concluido' ? (t.concluida || hoje()) : null;
       comentPend.forEach(txt=>t.coment.push({autor:S.me,texto:txt,quando:hoje()}));
-      if(ONLINE){ DB.salvarTask(t, false)
-        .then(()=>Promise.all(comentPend.map(txt=>DB.comentar(t.id, user(S.me).id, txt).catch(()=>{}))))
-        .then(recarregar)
-        .catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'salvar',task:t,novo:false}); toast('Sem conexão: alteração guardada, vai pro banco quando a internet voltar.',true); } else toast('Erro ao salvar: '+(e.message||e),true); }); }
-      toast('Tarefa salva.');
+
+      // se a regra de repetição mudou, refaz as ocorrências futuras da série
+      let apagadas = [], novaOcorr = null;
+      if(regraMudou){
+        const h = hoje();
+        const origem = t.repeteOrigem || t.id;
+        // futuras EM ABERTO e ainda NÃO vencidas, da mesma série, exceto a própria tarefa
+        apagadas = S.tasks.filter(x =>
+          x.id !== t.id &&
+          (x.repeteOrigem||x.id) === origem &&
+          x.status !== 'concluido' &&
+          x.prazo && x.prazo > h
+        );
+        const idsApagar = new Set(apagadas.map(x=>x.id));
+        if(idsApagar.size) S.tasks = S.tasks.filter(x=>!idsApagar.has(x.id));
+
+        // cria a próxima já na regra nova (se a tarefa ainda repete e não está concluída)
+        if(t.repete && t.status!=='concluido'){
+          const base = t.prazo || h;
+          const prox = proximaData(base, t.repete, {diaSem:t.repeteDiaSem, diaMes:t.repeteDiaMes});
+          if(prox && prox > h && !S.tasks.some(x=>(x.repeteOrigem||x.id)===origem && x.prazo===prox && x.status!=='concluido')){
+            novaOcorr = {
+              id: uid(), titulo:t.titulo, desc:t.desc, cat:t.cat, origem:t.origem, resp:t.resp,
+              solicitante:t.solicitante, pri:t.pri, status:'backlog', criada:hoje(),
+              inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete,
+              repeteDiaSem:t.repeteDiaSem, repeteDiaMes:t.repeteDiaMes, repeteOrigem:origem,
+              check:(t.check||[]).map(c=>({t:c.t,d:false})), concluida:null, coment:[], hist:[]
+            };
+            S.tasks.push(novaOcorr);
+          }
+        }
+      }
+
+      if(ONLINE){
+        const ops = DB.salvarTask(t, false)
+          .then(()=>Promise.all(comentPend.map(txt=>DB.comentar(t.id, user(S.me).id, txt).catch(()=>{}))))
+          .then(()=>Promise.all(apagadas.map(x=>DB.apagarTask(x.id).catch(()=>{}))))
+          .then(()=> novaOcorr ? DB.salvarTask(novaOcorr, true) : null)
+          .then(recarregar)
+          .catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'salvar',task:t,novo:false}); toast('Sem conexão: alteração guardada, vai pro banco quando a internet voltar.',true); } else toast('Erro ao salvar: '+(e.message||e),true); });
+      }
+      if(regraMudou && (apagadas.length || novaOcorr)){
+        toast(`Repetição atualizada.${apagadas.length?` ${apagadas.length} ocorrência(s) futura(s) refeita(s).`:''}${novaOcorr?` Próxima: ${fmt(novaOcorr.prazo)}.`:''}`);
+      } else {
+        toast('Tarefa salva.');
+      }
     }
     limparRascunho(id);   // salvou de verdade: descarta o rascunho automático
     fechar(); render();
