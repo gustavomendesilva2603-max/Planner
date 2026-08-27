@@ -366,18 +366,35 @@ const REPETE = {
   anual:       'Todo ano'
 };
 // calcula a data da PRÓXIMA ocorrência a partir de uma data base
-function proximaData(base, tipo){
+function proximaData(base, tipo, opts){
   if(!base || !tipo) return null;
   let d = base;
+  opts = opts || {};
   const somaMeses = n => { const x=new Date(d+'T12:00'); x.setMonth(x.getMonth()+n); return x.toISOString().slice(0,10); };
+  // ajusta uma data ISO para cair no dia do mês escolhido (trata meses curtos)
+  const noDiaDoMes = (iso, dia) => {
+    const x=new Date(iso+'T12:00');
+    const ultimo=new Date(x.getFullYear(), x.getMonth()+1, 0).getDate();
+    x.setDate(Math.min(dia, ultimo));
+    return x.toISOString().slice(0,10);
+  };
   switch(tipo){
     case 'diaria':     return addDias(d,1);
     case 'uteis':      { d=addDias(d,1); while(dow(d)===0||dow(d)===6) d=addDias(d,1); return d; }
-    case 'semanal':    return addDias(d,7);
+    case 'semanal': {
+      // se escolheu um dia da semana, vai para a próxima ocorrência desse dia; senão, +7
+      if(opts.diaSem!=null){
+        for(let i=1;i<=7;i++){ const x=addDias(d,i); if(dow(x)===opts.diaSem) return x; }
+      }
+      return addDias(d,7);
+    }
     case 'quinzenal':  return addDias(d,15);
-    case 'mensal':     return somaMeses(1);
-    case 'trimestral': return somaMeses(3);
-    case 'semestral':  return somaMeses(6);
+    case 'mensal': {
+      const prox = somaMeses(1);
+      return opts.diaMes!=null ? noDiaDoMes(prox, opts.diaMes) : prox;
+    }
+    case 'trimestral': { const p=somaMeses(3); return opts.diaMes!=null ? noDiaDoMes(p, opts.diaMes) : p; }
+    case 'semestral':  { const p=somaMeses(6); return opts.diaMes!=null ? noDiaDoMes(p, opts.diaMes) : p; }
     case 'anual':      return somaMeses(12);
     default: return null;
   }
@@ -523,7 +540,7 @@ if(typeof window!=='undefined'){
   const t = o => Object.assign({
     id:uid(), titulo:'', desc:'', cat:'BI', origem:'projeto', resp:'u1', solicitante:'', pri:3,
     status:'backlog', criada:h, inicio:null, prazo:null, est:2, gasto:0, check:[], rotinaId:null,
-    rotulos:[], repete:'', emailLink:'',
+    rotulos:[], repete:'', repeteDiaSem:null, repeteDiaMes:null, emailLink:'',
     concluida:null, coment:[], hist:[]
   }, o);
 
@@ -1211,9 +1228,24 @@ function abrirTask(id){
         <div class="f"><label for="f_repete">Repetição</label>
           <select id="f_repete">${Object.entries(REPETE).map(([k,n])=>`<option value="${k}" ${(t.repete||'')===k?'selected':''}>${n}</option>`).join('')}</select>
           <span class="log">Ao concluir, o sistema cria a próxima automaticamente.</span></div>
+        <div class="f" id="boxDiaSem" style="${t.repete==='semanal'?'':'display:none'}">
+          <label for="f_diaSem">Repetir toda</label>
+          <select id="f_diaSem">
+            <option value="">(mesmo dia do prazo)</option>
+            ${['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'].map((d,i)=>`<option value="${i}" ${String(t.repeteDiaSem)===String(i)?'selected':''}>${d}</option>`).join('')}
+          </select></div>
+        <div class="f" id="boxDiaMes" style="${['mensal','trimestral','semestral'].includes(t.repete)?'':'display:none'}">
+          <label for="f_diaMes">No dia do mês</label>
+          <select id="f_diaMes">
+            <option value="">(mesmo dia do prazo)</option>
+            ${Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}" ${String(t.repeteDiaMes)===String(n)?'selected':''}>Dia ${n}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="row">
         <div class="f"><label for="f_email">Link do e-mail</label>
           <input id="f_email" type="url" value="${esc(t.emailLink||'')}" placeholder="Cole o link do e-mail (Outlook, SharePoint…)">
           ${t.emailLink?`<a href="${esc(t.emailLink)}" target="_blank" rel="noopener" class="log" style="color:var(--eu)">✉ Abrir e-mail anexado</a>`:'<span class="log">Abra o e-mail no navegador e cole o link aqui.</span>'}</div>
+        <div class="f"></div>
       </div>
 
       <div class="f"><label>Checklist</label><div id="chk"></div>
@@ -1341,6 +1373,16 @@ function abrirTask(id){
     b.setAttribute('aria-pressed', rots.includes(k));
   });
 
+  // mostra o seletor de dia conforme o tipo de repetição
+  const atualizaBoxesRepete = () => {
+    const v=q('#f_repete').value;
+    const bs=q('#boxDiaSem'), bm=q('#boxDiaMes');
+    if(bs) bs.style.display = v==='semanal' ? '' : 'none';
+    if(bm) bm.style.display = ['mensal','trimestral','semestral'].includes(v) ? '' : 'none';
+  };
+  q('#f_repete').addEventListener('change', atualizaBoxesRepete);
+  atualizaBoxesRepete();
+
   function valida(){
     let ok = true;
     const tit = q('#f_tit').value.trim();
@@ -1367,6 +1409,8 @@ function abrirTask(id){
       origem:q('#f_ori').value, resp:q('#f_resp').value, pri:+q('#f_pri').value,
       status:q('#f_st').value, prazo:q('#f_prazo').value||null, inicio:q('#f_inicio').value||null,
       solicitante:q('#f_sol').value.trim(), rotulos:rots, repete:q('#f_repete').value||'',
+      repeteDiaSem: q('#f_diaSem') && q('#f_diaSem').value!=='' ? +q('#f_diaSem').value : null,
+      repeteDiaMes: q('#f_diaMes') && q('#f_diaMes').value!=='' ? +q('#f_diaMes').value : null,
       emailLink:(q('#f_email').value||'').trim(), check:chk
     };
     if(novo){
@@ -1558,13 +1602,14 @@ function mover(id, novoSt){
   let criada = null;
   if(novoSt==='concluido' && t.repete){
     const baseData = t.prazo || t.concluida || hoje();
-    const prox = proximaData(baseData, t.repete);
+    const prox = proximaData(baseData, t.repete, {diaSem:t.repeteDiaSem, diaMes:t.repeteDiaMes});
     const origem = t.repeteOrigem || t.id;
     if(prox && !S.tasks.some(x=>(x.repeteOrigem||x.id)===origem && x.prazo===prox && x.status!=='concluido')){
       criada = {
         id: uid(), titulo:t.titulo, desc:t.desc, cat:t.cat, origem:t.origem, resp:t.resp,
         solicitante:t.solicitante, pri:t.pri, status:'backlog', criada:hoje(),
-        inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete, repeteOrigem:origem,
+        inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete,
+        repeteDiaSem:t.repeteDiaSem, repeteDiaMes:t.repeteDiaMes, repeteOrigem:origem,
         check:(t.check||[]).map(c=>({t:c.t,d:false})), concluida:null, coment:[], hist:[]
       };
       S.tasks.push(criada);
@@ -1859,6 +1904,7 @@ function fromRow(r){
     resp:r.responsavel, solicitante:r.solicitante||'', pri:r.prioridade, status:r.status,
     criada:(r.criado_em||'').slice(0,10), inicio:r.data_inicio||null, prazo:r.prazo,
     rotulos:Array.isArray(r.rotulos)?r.rotulos:[], repete:r.repete||'', repeteOrigem:r.repete_origem||null,
+    repeteDiaSem:(r.repete_dia_sem==null?null:r.repete_dia_sem), repeteDiaMes:(r.repete_dia_mes==null?null:r.repete_dia_mes),
     emailLink:r.email_link||'',
     check:(r.checklist||[]).sort((a,b)=>a.ordem-b.ordem).map(c=>({id:c.id,t:c.texto,d:c.feito})),
     rotinaId:r.rotina_id, concluida:r.concluido_em,
@@ -1871,6 +1917,7 @@ function toRow(t){
   return {titulo:t.titulo, descricao:t.desc, categoria_id:t.cat, origem:t.origem, responsavel:resp,
     solicitante:t.solicitante, prioridade:t.pri, status:t.status, prazo:t.prazo||null, data_inicio:t.inicio||null,
     rotulos:t.rotulos||[], repete:t.repete||'', repete_origem:ehUUID(t.repeteOrigem)?t.repeteOrigem:null,
+    repete_dia_sem:(t.repeteDiaSem==null?null:t.repeteDiaSem), repete_dia_mes:(t.repeteDiaMes==null?null:t.repeteDiaMes),
     email_link:t.emailLink||'',
     concluido_em:t.concluida||null, criado_por:criador};
 }
