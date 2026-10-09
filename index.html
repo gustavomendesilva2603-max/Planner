@@ -108,6 +108,7 @@ main{overflow:auto;display:flex;flex-direction:column}
 .card{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--mut2);border-radius:9px;padding:11px;cursor:grab;display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
 .card:hover{border-color:var(--mut2)}
 .card.dragging{opacity:.4}
+.card.drop-antes{box-shadow:0 -3px 0 0 var(--eu);margin-top:3px}
 .card .t{font-size:13.5px;line-height:1.35;font-weight:500}
 .card .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--mut)}
 .card .move{display:flex;gap:6px;margin-top:2px}
@@ -182,7 +183,10 @@ tbody tr{cursor:pointer}
 .f{display:flex;flex-direction:column;gap:6px}
 .f label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
 .f input,.f select,.f textarea{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
-.f textarea{min-height:74px;resize:vertical}
+.f textarea{min-height:74px;resize:vertical;overflow:auto}
+#f_desc{min-height:90px;max-height:70vh;resize:vertical}
+/* deixa a alcinha de arrastar bem visível no canto de baixo */
+#f_desc::-webkit-resizer{border-width:8px;border-style:solid;border-color:transparent var(--eu) var(--eu) transparent}
 .f .err{color:var(--bad);font-size:11px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
@@ -540,7 +544,7 @@ if(typeof window!=='undefined'){
   const t = o => Object.assign({
     id:uid(), titulo:'', desc:'', cat:'BI', origem:'projeto', resp:'u1', solicitante:'', pri:3,
     status:'backlog', criada:h, inicio:null, prazo:null, est:2, gasto:0, check:[], rotinaId:null,
-    rotulos:[], repete:'', repeteDiaSem:null, repeteDiaMes:null, emailLink:'',
+    rotulos:[], repete:'', repeteDiaSem:null, repeteDiaMes:null, emailLink:'', ordem:null,
     concluida:null, coment:[], hist:[]
   }, o);
 
@@ -676,6 +680,14 @@ function ordenaPadrao(a,b){
   if(pa !== pb) return pa < pb ? -1 : 1;                        // prazo mais próximo
   return a.titulo.localeCompare(b.titulo, 'pt-BR');             // desempate estável
 }
+// ordenação do quadro por status: respeita a ordem MANUAL (arrastada) quando existe,
+// e cai no padrão pra quem ainda não tem ordem definida
+function ordenaBoard(a,b){
+  const oa = a.ordem==null ? Infinity : a.ordem;
+  const ob = b.ordem==null ? Infinity : b.ordem;
+  if(oa !== ob) return oa - ob;
+  return ordenaPadrao(a,b);
+}
 
 function cardHTML(t){
   const u = user(t.resp), c = cor(t.cat), P = pri(t.pri);
@@ -766,7 +778,7 @@ function vBoard(){
         list = list.filter(t=>!t.concluida || diffD(t.concluida,hoje())<=CFG.arquivarConcl);
         if(total>list.length) nota = `<div class="hint" style="margin:8px 2px 0">+${total-list.length} concluídas há mais de ${CFG.arquivarConcl} dias (veja em Lista completa).</div>`;
       }
-      list.sort(ordenaPadrao);
+      list.sort(ordenaBoard);
       const over = s.k==='andamento' && estourouWip.length;
       const recolhida = S.colsRecolhidas.includes(s.k);
       return `<section class="col ${recolhida?'recolhida':''}" data-st="${s.k}" aria-label="${s.n}">
@@ -775,7 +787,7 @@ function vBoard(){
         <div class="body">${list.map(cardHTML).join('') || '<div class="empty">Nada aqui.</div>'}${nota}</div>
       </section>`;
     }).join('')}</div>
-    <p class="hint" style="margin-top:14px">Arraste os cards ou, com o card focado, use <b>← →</b> para mudar de coluna e <b>Enter</b> para abrir. O botão ✓ conclui na hora.</p>`;
+    <p class="hint" style="margin-top:14px">Arraste os cards para outra coluna <b>ou para cima/baixo</b> para ordenar como quiser. Com o card focado, use <b>← →</b> para mudar de coluna e <b>Enter</b> para abrir. O botão ✓ conclui na hora.</p>`;
     ligarBoard();
     return;
   }
@@ -1767,15 +1779,61 @@ function ligarBoard(){
       if(e.key==='ArrowLeft'  && i>0)              { e.preventDefault(); mover(c.dataset.id, STATUS[i-1].k); }
     });
   });
+  // descobre, pela posição vertical do cursor, antes de qual card soltar
+  const cardAlvo = (body, y) => {
+    const cards = [...body.querySelectorAll('.card:not(.dragging)')];
+    for(const c of cards){
+      const r = c.getBoundingClientRect();
+      if(y < r.top + r.height/2) return c;   // soltou na metade de cima deste card
+    }
+    return null;                             // soltou no fim da coluna
+  };
   $('#view').querySelectorAll('.col').forEach(col=>{
-    col.addEventListener('dragover',  e => { e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drop'); });
-    col.addEventListener('dragleave', e => { if(!col.contains(e.relatedTarget)) col.classList.remove('drop'); });
+    const body = col.querySelector('.body');
+    col.addEventListener('dragover',  e => {
+      e.preventDefault(); e.dataTransfer.dropEffect='move'; col.classList.add('drop');
+      // mostra uma linha-guia de onde vai cair
+      body && body.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-antes'));
+      if(body){ const alvo = cardAlvo(body, e.clientY); if(alvo) alvo.classList.add('drop-antes'); }
+    });
+    col.addEventListener('dragleave', e => { if(!col.contains(e.relatedTarget)){ col.classList.remove('drop'); body && body.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-antes')); } });
     col.addEventListener('drop',      e => {
       e.preventDefault(); col.classList.remove('drop');
+      body && body.querySelectorAll('.card').forEach(c=>c.classList.remove('drop-antes'));
       const id = arrastando || e.dataTransfer.getData('text/plain');
-      if(id) mover(id, col.dataset.st);
+      if(!id) return;
+      const alvo = body ? cardAlvo(body, e.clientY) : null;
+      reordenar(id, col.dataset.st, alvo ? alvo.dataset.id : null);
     });
   });
+}
+
+// move a tarefa `id` para o status dado, posicionando-a ANTES de `antesDeId`
+// (ou no fim, se antesDeId for null). Recalcula a ordem manual da coluna.
+function reordenar(id, status, antesDeId){
+  const t = S.tasks.find(x=>x.id===id); if(!t) return;
+  if(antesDeId === id) return;               // soltou em cima de si mesma
+  const mudouStatus = t.status !== status;
+
+  // se mudou de coluna, deixa o mover() cuidar do status e efeitos (conclusão, repetição, etc.)
+  if(mudouStatus){ mover(id, status); }
+
+  // agora reordena dentro da coluna de destino
+  let col = S.tasks.filter(x=>x.status===status && x.id!==id && ativa(x)).sort(ordenaBoard);
+  let idx = antesDeId ? col.findIndex(x=>x.id===antesDeId) : -1;
+  if(idx < 0) idx = col.length;              // fim da coluna
+  col.splice(idx, 0, t);                     // insere a tarefa na posição escolhida
+
+  // reescreve a ordem: 0,1,2,3... só grava as que mudaram
+  const alteradas = [];
+  col.forEach((x,i)=>{ if(x.ordem !== i){ x.ordem = i; alteradas.push(x); } });
+
+  render();
+  if(ONLINE){
+    alteradas.forEach(x=>{
+      DB.salvarTask(x, false).catch(e=>{ if(ehErroRede(e)) enfileirar({tipo:'salvar',task:x,novo:false}); });
+    });
+  }
 }
 
 function ligarLinhas(){
@@ -2009,6 +2067,7 @@ function fromRow(r){
     criada:(r.criado_em||'').slice(0,10), inicio:r.data_inicio||null, prazo:r.prazo,
     rotulos:Array.isArray(r.rotulos)?r.rotulos:[], repete:r.repete||'', repeteOrigem:r.repete_origem||null,
     repeteDiaSem:(r.repete_dia_sem==null?null:r.repete_dia_sem), repeteDiaMes:(r.repete_dia_mes==null?null:r.repete_dia_mes),
+    ordem:(r.ordem==null?null:r.ordem),
     emailLink:r.email_link||'',
     check:(r.checklist||[]).sort((a,b)=>a.ordem-b.ordem).map(c=>({id:c.id,t:c.texto,d:c.feito})),
     rotinaId:r.rotina_id, concluida:r.concluido_em,
@@ -2022,6 +2081,7 @@ function toRow(t){
     solicitante:t.solicitante, prioridade:t.pri, status:t.status, prazo:t.prazo||null, data_inicio:t.inicio||null,
     rotulos:t.rotulos||[], repete:t.repete||'', repete_origem:ehUUID(t.repeteOrigem)?t.repeteOrigem:null,
     repete_dia_sem:(t.repeteDiaSem==null?null:t.repeteDiaSem), repete_dia_mes:(t.repeteDiaMes==null?null:t.repeteDiaMes),
+    ordem:(t.ordem==null?null:t.ordem),
     email_link:t.emailLink||'',
     concluido_em:t.concluida||null, criado_por:criador};
 }
