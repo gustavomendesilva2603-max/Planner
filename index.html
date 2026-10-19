@@ -1297,6 +1297,9 @@ function abrirTask(id){
       toast('Rascunho recuperado do que você estava digitando.');
     }
   }
+  // GARANTIA: toda task NOVA começa com a data de hoje no início
+  // (mesmo que o seed ou o rascunho tenham deixado o campo vazio)
+  if(novo && q('#f_inicio') && !q('#f_inicio').value){ q('#f_inicio').value = hoje(); }
   let rascT;
   const guardaRascunho = () => {
     clearTimeout(rascT);
