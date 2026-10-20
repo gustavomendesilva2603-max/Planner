@@ -2008,7 +2008,7 @@ const DB = {
   async carregarTudo(){
     const [mem, tar, rot] = await Promise.all([
       sb.from('membros').select('*').order('nome'),
-      sb.from('tarefas').select('*, checklist(*), comentarios(*)'),
+      sb.from('tarefas').select('*, checklist(*), comentarios(*)').order('criado_em',{ascending:false}).limit(100000),
       sb.from('rotinas').select('*')
     ]);
     if(mem.error) throw mem.error;
