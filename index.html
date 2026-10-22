@@ -706,7 +706,9 @@ function cardHTML(t){
     <span class="meta">
       <span class="p" style="background:${P.c}" title="Prioridade ${P.n}"></span>
       <span class="tag" style="color:${c}">${cat(t.cat).nome}</span>
-      ${t.prazo?`<span class="due ${cls}">${cls==='late'?'⚠ ':''}${fmt(t.prazo)}</span>`:'<span class="due" style="color:var(--warn)">sem prazo</span>'}
+      ${t.status==='concluido' && t.concluida
+          ? `<span class="due" style="color:var(--ok)" title="Concluída em ${fmt(t.concluida)}">✓ ${fmt(t.concluida)}</span>`
+          : (t.prazo?`<span class="due ${cls}">${cls==='late'?'⚠ ':''}${fmt(t.prazo)}</span>`:'<span class="due" style="color:var(--warn)">sem prazo</span>')}
       ${t.check.length?`<span class="rot" style="color:var(--mut)">☑ ${t.check.filter(x=>x.d).length}/${t.check.length}</span>`:''}
       ${(t.repete||t.rotinaId)?`<span class="rot" title="Repete: ${REPETE[t.repete]||'sim'}">↻</span>`:''}
       ${t.emailLink?`<span class="rot" title="E-mail anexado">✉</span>`:''}
