@@ -404,6 +404,24 @@ function proximaData(base, tipo, opts){
   }
 }
 
+// gera TODAS as datas de uma série recorrente, do prazo inicial até a data "ate" (inclusive).
+// Limita a 500 ocorrências por segurança (evita inflar o banco sem querer).
+const MAX_OCORRENCIAS = 500;
+function geraSerieDatas(base, tipo, ate, opts){
+  const datas = [];
+  if(!base || !tipo || !ate) return datas;
+  let d = base;
+  // a primeira ocorrência é a própria data base (se já estiver no intervalo)
+  if(d <= ate) datas.push(d);
+  while(datas.length < MAX_OCORRENCIAS){
+    const prox = proximaData(d, tipo, opts);
+    if(!prox || prox > ate) break;
+    datas.push(prox);
+    d = prox;
+  }
+  return datas;
+}
+
 const CFG = {
   wip: 3,              // limite de tarefas simultâneas em "Em andamento" por pessoa
   arquivarConcl: 14,   // dias que a tarefa concluída fica visível no quadro
@@ -1240,8 +1258,11 @@ function abrirTask(id){
 
       <div class="row">
         <div class="f"><label for="f_repete">Repetição</label>
-          <select id="f_repete">${Object.entries(REPETE).map(([k,n])=>`<option value="${k}" ${(t.repete||'')===k?'selected':''}>${n}</option>`).join('')}</select>
-          <span class="log">Ao concluir, o sistema cria a próxima automaticamente.</span></div>
+          <select id="f_repete">${Object.entries(REPETE).map(([k,n])=>`<option value="${k}" ${(t.repete||'')===k?'selected':''}>${n}</option>`).join('')}</select></div>
+        <div class="f" id="boxRepeteAte" style="${(novo && t.repete)?'':'display:none'}">
+          <label for="f_repeteAte">Repetir até</label>
+          <input type="date" id="f_repeteAte" value="">
+          <span class="log" id="logRepete">Cria todas as ocorrências de uma vez, até esta data.</span></div>
         <div class="f" id="boxDiaSem" style="${t.repete==='semanal'?'':'display:none'}">
           <label for="f_diaSem">Repetir toda</label>
           <select id="f_diaSem">
@@ -1393,9 +1414,11 @@ function abrirTask(id){
   // mostra o seletor de dia conforme o tipo de repetição
   const atualizaBoxesRepete = () => {
     const v=q('#f_repete').value;
-    const bs=q('#boxDiaSem'), bm=q('#boxDiaMes');
+    const bs=q('#boxDiaSem'), bm=q('#boxDiaMes'), ba=q('#boxRepeteAte');
     if(bs) bs.style.display = v==='semanal' ? '' : 'none';
     if(bm) bm.style.display = ['mensal','trimestral','semestral'].includes(v) ? '' : 'none';
+    // "repetir até" só em tarefa nova e quando há repetição
+    if(ba) ba.style.display = (novo && v) ? '' : 'none';
   };
   q('#f_repete').addEventListener('change', atualizaBoxesRepete);
   atualizaBoxesRepete();
@@ -1439,6 +1462,29 @@ function abrirTask(id){
       emailLink:(q('#f_email').value||'').trim(), check:chk
     };
     if(novo){
+      // SÉRIE: repetição + "repetir até" → cria todas as ocorrências de uma vez
+      const repeteAte = (q('#f_repeteAte') && q('#f_repeteAte').value) || '';
+      if(o.repete && repeteAte){
+        if(!o.prazo){ toast('Defina um prazo pra gerar a série.', true); q('#f_prazo').focus(); return; }
+        const datas = geraSerieDatas(o.prazo, o.repete, repeteAte, {diaSem:o.repeteDiaSem, diaMes:o.repeteDiaMes});
+        if(datas.length===0){ toast('A data de "repetir até" precisa ser igual ou depois do prazo.', true); return; }
+        const criadas = datas.map((dt,i)=>Object.assign({}, o, {
+          id:uid(), criada:hoje(), rotinaId:null, coment:[], hist:[],
+          prazo:dt, inicio:dt,
+          status: i===0 ? o.status : 'backlog',
+          concluida: (i===0 && o.status==='concluido') ? hoje() : null,
+          repete:'', repeteDiaSem:null, repeteDiaMes:null, repeteOrigem:null,
+          check:(chk||[]).map(c=>({t:c.t,d:false}))
+        }));
+        criadas.forEach(c=>S.tasks.push(c));
+        if(ONLINE){
+          Promise.all(criadas.map(c=>DB.salvarTask(c, true).catch(e=>{ if(ehErroRede(e)) enfileirar({tipo:'salvar',task:c,novo:true}); })))
+            .then(recarregar).catch(e=>toast('Erro ao salvar série: '+(e.message||e),true));
+        }
+        limparRascunho(id);
+        toast(`${criadas.length} ocorrência(s) criada(s), até ${fmt(repeteAte)}.`);
+        fechar(); render(); return;
+      }
       const nova = Object.assign({id:uid(),criada:hoje(),rotinaId:null,concluida:null,coment:[],hist:[]}, o);
       nova.concluida = nova.status==='concluido' ? hoje() : null;
       comentPend.forEach(txt=>nova.coment.push({autor:S.me,texto:txt,quando:hoje()}));
