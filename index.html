@@ -260,7 +260,7 @@ tbody tr{cursor:pointer}
         <button class="btn sm" id="zerar">Recomeçar</button>
       </div>
       <div class="log" id="salvoInfo" style="margin-top:8px"></div>
-      <div class="log" style="margin-top:4px;opacity:.6">versão 2026-08-12 · tema+semana+repetição</div>
+      <div class="log" style="margin-top:4px;opacity:.6">versão 2026-11-04 · repetição por data · mostra as abertas + mês atual e anterior</div>
     </div>
   </aside>
 
@@ -321,7 +321,9 @@ try{
    1. DOMÍNIO
    ========================================================================= */
 const uid   = () => 'x' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
-const hoje  = () => new Date().toISOString().slice(0,10);
+// data no fuso de quem usa (toISOString puro é UTC e virava o dia às 21h em Brasília)
+const isoLocal = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const hoje  = () => isoLocal(new Date());
 const addDias = (iso,n) => { const d=new Date(iso+'T12:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
 const dow   = iso => new Date(iso+'T12:00').getDay();
 const fmt   = iso => iso ? iso.slice(8,10)+'/'+iso.slice(5,7) : '—';
@@ -374,7 +376,12 @@ function proximaData(base, tipo, opts){
   if(!base || !tipo) return null;
   let d = base;
   opts = opts || {};
-  const somaMeses = n => { const x=new Date(d+'T12:00'); x.setMonth(x.getMonth()+n); return x.toISOString().slice(0,10); };
+  // soma meses sem transbordar: 31/01 + 1 mês = 28/02 (igual à função do banco)
+  const somaMeses = n => {
+    const [a,m,dia] = d.split('-').map(Number);
+    const ultimo = new Date(a, m-1+n+1, 0).getDate();
+    return new Date(a, m-1+n, Math.min(dia,ultimo), 12).toISOString().slice(0,10);
+  };
   // ajusta uma data ISO para cair no dia do mês escolhido (trata meses curtos)
   const noDiaDoMes = (iso, dia) => {
     const x=new Date(iso+'T12:00');
@@ -450,7 +457,7 @@ const S = {
     {id:'u4',nome:'Evellyn',   ini:'EV',papel:'analista',   cargo:'Auxiliar de ADM',    cor:'#F5934A',capacidade:8},
     {id:'u5',nome:'Lucas Nadu',ini:'LN',papel:'analista',   cargo:'Assistente de ADM',  cor:'#E8637E',capacidade:7}
   ],
-  tasks:[], rotinas:[]
+  tasks:[]
 };
 const user = id => S.users.find(u=>u.id===id) || {id:'',nome:'Sem responsável',ini:'—',capacidade:0,papel:'analista',cor:'#4E606C'};
 // quem enxerga TUDO (quadro completo + aba Coordenação): coordenação ou admin
@@ -474,7 +481,7 @@ function salvar(){
   if(!temStorage || ONLINE) return;
   try{
     localStorage.setItem(CHAVE, JSON.stringify({
-      versao:3, users:S.users, tasks:S.tasks, rotinas:S.rotinas,
+      versao:3, users:S.users, tasks:S.tasks,
       me:S.me, salvoEm:new Date().toISOString()
     }));
   }catch(e){ /* cota cheia: ignora, não trava o app */ }
@@ -487,7 +494,6 @@ function carregar(){
     if(!Array.isArray(d.tasks) || !Array.isArray(d.users)) return false;
     S.users   = d.users;
     S.tasks   = d.tasks.map(t=>Object.assign({origem:'projeto',check:[],coment:[],hist:[],est:0,gasto:0},t));
-    S.rotinas = Array.isArray(d.rotinas)?d.rotinas:[];
     if(d.me) S.me = d.me;
     return true;
   }catch(e){ return false; }
@@ -585,61 +591,7 @@ if(typeof window!=='undefined'){
     t({titulo:'Levantar pendências de cadastro de lojas novas',cat:'ADM',origem:'projeto',resp:'u4',pri:3,status:'concluido',prazo:addDias(h,-10),est:2,gasto:2,concluida:addDias(h,-11)})
   ];
 
-  S.rotinas = [
-    {id:uid(),titulo:'Checar atualização das bases às 07h',cat:'BI',resp:'u3',pri:2,est:.5,freq:'uteis',dias:[],diaMes:1,prazoOffset:0,expiraDias:1,ativa:true,ultima:addDias(h,-1)},
-    {id:uid(),titulo:'Triagem de chamados abertos no dia',cat:'CHAMADO',resp:'u5',pri:2,est:1,freq:'diaria',dias:[],diaMes:1,prazoOffset:0,expiraDias:2,ativa:true,ultima:addDias(h,-1)},
-    {id:uid(),titulo:'Enviar prévia de eficácia para supervisão',cat:'GESTAO',resp:'u1',pri:3,est:1.5,freq:'semanal',dias:[3],diaMes:1,prazoOffset:0,expiraDias:3,ativa:true,ultima:addDias(h,-15)},
-    {id:uid(),titulo:'Fechar apontamento de horas do time',cat:'ADM',resp:'u4',pri:3,est:1,freq:'semanal',dias:[5],diaMes:1,prazoOffset:0,expiraDias:3,ativa:true,ultima:addDias(h,-15)},
-    {id:uid(),titulo:'Conciliar base interna x parceira',cat:'ADM',resp:'u5',pri:2,est:3,freq:'mensal',dias:[],diaMes:5,prazoOffset:2,expiraDias:0,ativa:true,ultima:null}
-  ];
 })();
-
-/* =========================================================================
-   3. MOTOR DE ROTINAS
-   ========================================================================= */
-function devePara(r, iso){
-  if(!r.ativa) return false;
-  const d = dow(iso);
-  switch(r.freq){
-    case 'diaria':  return true;
-    case 'uteis':   return d>=1 && d<=5;
-    case 'semanal': return Array.isArray(r.dias) && r.dias.includes(d);
-    case 'mensal':  return Number(iso.slice(8,10)) === Number(r.diaMes);
-    default:        return false;
-  }
-}
-// idempotente: rodar N vezes no mesmo dia não duplica nada
-function gerarRotinas(){
-  const h = hoje(); let criadas = 0;
-  S.rotinas.forEach(r => {
-    let d = r.ultima ? addDias(r.ultima,1) : h;
-    if(diffD(d,h) > 60) d = addDias(h,-60);        // teto de recuperação
-    for(; diffD(d,h) >= 0; d = addDias(d,1)){
-      if(!devePara(r,d)) continue;
-      if(S.tasks.some(t => t.rotinaId===r.id && t.criada===d)) continue;
-      S.tasks.push({
-        id:uid(), titulo:r.titulo, desc:'Tarefa gerada automaticamente pela rotina.',
-        cat:r.cat, origem:'rotina', resp:r.resp, solicitante:'Rotina', pri:r.pri,
-        status:'backlog', criada:d, prazo:addDias(d, r.prazoOffset||0), est:r.est, gasto:0,
-        check:[], rotinaId:r.id, concluida:null, coment:[], hist:[]
-      });
-      criadas++;
-    }
-    if(r.ativa) r.ultima = h;
-  });
-  return criadas;
-}
-// rotina vencida não fica entulhando o quadro: vira "expirada" e conta como perda
-function expirarRotinas(){
-  const h = hoje(); let n = 0;
-  S.tasks.forEach(t => {
-    if(!t.rotinaId || t.status!=='backlog') return;
-    const r = S.rotinas.find(x=>x.id===t.rotinaId);
-    if(!r || !r.expiraDias) return;
-    if(diffD(t.criada,h) > r.expiraDias){ t.status='expirado'; n++; }
-  });
-  return n;
-}
 
 /* =========================================================================
    4. HELPERS DE UI
@@ -923,39 +875,6 @@ function vLista(){
   });
 }
 
-const descRot = r =>
-  r.freq==='diaria'  ? 'Todo dia' :
-  r.freq==='uteis'   ? 'Dias úteis (seg a sex)' :
-  r.freq==='semanal' ? 'Toda ' + (r.dias||[]).slice().sort().map(d=>DIAS[d]).join(', ') :
-  r.freq==='mensal'  ? 'Todo dia ' + r.diaMes + ' do mês' : '—';
-
-function vRotinas(){
-  $('#view').innerHTML = `<div class="panel" style="overflow:auto">
-    <h3>Rotinas cadastradas</h3>
-    <div class="hint">A rotina é o molde, não a tarefa. Na data programada ela cria uma tarefa nova no quadro.
-    Aderência = quantas das tarefas geradas nos últimos 30 dias foram concluídas. Aderência baixa quer dizer que a rotina não cabe na semana de quem recebeu, ou que ela não deveria existir.</div>
-    <table><thead><tr><th>Rotina</th><th>Frequência</th><th>Categoria</th><th>Responsável</th><th>Est.</th><th>Expira</th><th>Aderência 30d</th><th>Situação</th></tr></thead>
-    <tbody>${S.rotinas.map(r=>{
-      const ger = S.tasks.filter(t=>t.rotinaId===r.id && diffD(t.criada,hoje())<=30);
-      const ok  = ger.filter(t=>t.status==='concluido').length;
-      const exp = ger.filter(t=>t.status==='expirado').length;
-      const ad  = ger.length?Math.round(100*ok/ger.length):null;
-      return `<tr data-rot="${r.id}" tabindex="0">
-        <td>${esc(r.titulo)}</td><td>${descRot(r)}</td>
-        <td><span class="tag" style="color:${cor(r.cat)}">${cat(r.cat).nome}</span></td>
-        <td>${esc(user(r.resp).nome)}</td><td class="mono">${r.est}h</td>
-        <td class="mono" style="color:var(--mut)">${r.expiraDias?r.expiraDias+'d':'nunca'}</td>
-        <td class="mono" style="color:${ad===null?'var(--mut)':ad>=80?'var(--ok)':ad>=50?'var(--warn)':'var(--bad)'}">
-          ${ad===null?'—':ad+'%'} <span style="color:var(--mut)">(${ok}/${ger.length}${exp?`, ${exp} expirada${exp>1?'s':''}`:''})</span></td>
-        <td>${r.ativa?'<span style="color:var(--ok)">ativa</span>':'<span style="color:var(--mut)">pausada</span>'}</td></tr>`;
-    }).join('')}</tbody></table>
-    ${S.rotinas.length?'':'<div class="empty">Nenhuma rotina cadastrada.</div>'}</div>`;
-  $('#view').querySelectorAll('tr[data-rot]').forEach(tr=>{
-    tr.onclick = () => abrirRotina(tr.dataset.rot);
-    tr.onkeydown = e => { if(e.key==='Enter'){e.preventDefault();abrirRotina(tr.dataset.rot);} };
-  });
-}
-
 /* ---------- CALENDÁRIO MENSAL ---------- */
 function vCalendario(){
   const h = hoje();
@@ -1065,7 +984,6 @@ function vPainel(){
   const conc30    = TASKS.filter(t=>t.status==='concluido' && t.concluida && diffD(t.concluida,h)<=30 && diffD(t.concluida,h)>=0);
   const np        = conc30.filter(noPrazo);
   const sla       = conc30.length?Math.round(100*np.length/conc30.length):null;
-  const expiradas = TASKS.filter(t=>t.status==='expirado' && diffD(t.criada,h)<=30);
 
   const pessoasBase = fp.resp ? S.users.filter(u=>u.id===fp.resp) : S.users;
   const pessoas = pessoasBase.map(u=>{
@@ -1108,7 +1026,6 @@ function vPainel(){
     ${kpi('Atrasadas', atrasadas.length, atrasadas.length?'Exige decisão hoje':'Nenhuma vencida', atrasadas.length?'var(--bad)':'var(--ok)')}
     ${kpi('Entregues em 30 dias', conc30.length, `${np.length} dentro do prazo`)}
     ${kpi('Cumprimento de prazo', sla===null?'—':sla+'%', 'Média de 30 dias', sla===null?'var(--mut)':sla>=85?'var(--ok)':sla>=65?'var(--warn)':'var(--bad)')}
-    ${kpi('Rotinas perdidas', expiradas.length, 'Expiraram sem execução em 30d', expiradas.length?'var(--warn)':'var(--ok)')}
   </div>
 
   <div class="panel" style="margin-bottom:16px">
@@ -1222,13 +1139,11 @@ function abrirTask(id){
     status:'backlog',criada:hoje(),inicio:hoje(),prazo:addDias(hoje(),pri(3).sla),est:2,gasto:0,check:[],rotinaId:null,rotulos:[],concluida:null,coment:[],hist:[]};
 
   const chk = JSON.parse(JSON.stringify(t.check||[]));
-  const rot = t.rotinaId ? S.rotinas.find(r=>r.id===t.rotinaId) : null;
 
   sheet.innerHTML = `
     <header>
       <span class="tag" id="hCat" style="color:${cor(t.cat)}">${cat(t.cat).nome}</span>
       <b id="shTitle" style="font-size:15px">${novo?'Nova tarefa':'Tarefa'}</b>
-      ${rot?`<span class="rot">↻ rotina: ${esc(rot.titulo)}</span>`:''}
       ${!novo&&t.status==='expirado'?'<span class="tag" style="color:var(--bad)">expirada</span>':''}
       <span style="flex:1"></span>
       ${novo?'':'<button class="btn sm danger" id="del">Excluir</button>'}
@@ -1473,13 +1388,23 @@ function abrirTask(id){
           prazo:dt, inicio:dt,
           status: i===0 ? o.status : 'backlog',
           concluida: (i===0 && o.status==='concluido') ? hoje() : null,
-          repete:'', repeteDiaSem:null, repeteDiaMes:null, repeteOrigem:null,
+          repete:o.repete, repeteDiaSem:o.repeteDiaSem, repeteDiaMes:o.repeteDiaMes, repeteAte,
+          repeteOrigem:null,
           check:(chk||[]).map(c=>({t:c.t,d:false}))
         }));
+        // a primeira é a origem da série; as demais apontam para ela
+        const [primeira, ...resto] = criadas;
+        resto.forEach(c=>{ c.repeteOrigem = primeira.id; });
         criadas.forEach(c=>S.tasks.push(c));
         if(ONLINE){
-          Promise.all(criadas.map(c=>DB.salvarTask(c, true).catch(e=>{ if(ehErroRede(e)) enfileirar({tipo:'salvar',task:c,novo:true}); })))
-            .then(recarregar).catch(e=>toast('Erro ao salvar série: '+(e.message||e),true));
+          // grava a primeira antes, porque só então existe o id real do banco
+          DB.salvarTask(primeira, true)
+            .then(()=>{
+              resto.forEach(c=>{ c.repeteOrigem = primeira.id; });
+              return Promise.all(resto.map(c=>DB.salvarTask(c, true)));
+            })
+            .then(recarregar)
+            .catch(e=>{ toast('Erro ao salvar a série, confira o quadro: '+(e.message||e),true); recarregar(); });
         }
         limparRascunho(id);
         toast(`${criadas.length} ocorrência(s) criada(s), até ${fmt(repeteAte)}.`);
@@ -1489,8 +1414,10 @@ function abrirTask(id){
       nova.concluida = nova.status==='concluido' ? hoje() : null;
       comentPend.forEach(txt=>nova.coment.push({autor:S.me,texto:txt,quando:hoje()}));
       S.tasks.push(nova);
+      if(!ONLINE) criarProximaOcorrencia(nova);   // tarefa que já nasce concluída
       if(ONLINE){ DB.salvarTask(nova, true)
         .then(()=>Promise.all(comentPend.map(txt=>DB.comentar(nova.id, user(S.me).id, txt).catch(()=>{}))))
+        .then(()=>{ const prox = criarProximaOcorrencia(nova); return prox ? DB.salvarTask(prox, true) : null; })
         .then(recarregar)
         .catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'salvar',task:nova,novo:true}); toast('Sem conexão: tarefa guardada, vai pro banco quando a internet voltar.',true); } else toast('Erro ao salvar: '+(e.message||e),true); }); }
       toast('Tarefa criada.');
@@ -1513,10 +1440,13 @@ function abrirTask(id){
       comentPend.forEach(txt=>t.coment.push({autor:S.me,texto:txt,quando:hoje()}));
 
       // se a regra de repetição mudou, refaz as ocorrências futuras da série
-      let apagadas = [], novaOcorr = null;
+      let apagadas = [], novaOcorr = null, ajustadas = [];
       if(regraMudou){
         const h = hoje();
         const origem = t.repeteOrigem || t.id;
+        // as outras abertas da série passam a seguir a regra nova, inclusive as atrasadas
+        ajustadas = S.tasks.filter(x => x.id !== t.id && (x.repeteOrigem||x.id) === origem && ativa(x));
+        ajustadas.forEach(x => { x.repete = t.repete; x.repeteDiaSem = t.repeteDiaSem; x.repeteDiaMes = t.repeteDiaMes; });
         // futuras EM ABERTO e ainda NÃO vencidas, da mesma série, exceto a própria tarefa
         apagadas = S.tasks.filter(x =>
           x.id !== t.id &&
@@ -1531,12 +1461,13 @@ function abrirTask(id){
         if(t.repete && t.status!=='concluido'){
           const base = t.prazo || h;
           const prox = proximaData(base, t.repete, {diaSem:t.repeteDiaSem, diaMes:t.repeteDiaMes});
-          if(prox && prox > h && !S.tasks.some(x=>(x.repeteOrigem||x.id)===origem && x.prazo===prox && x.status!=='concluido')){
+          const dentroDoLimite = !t.repeteAte || prox <= t.repeteAte;
+          if(prox && prox > h && dentroDoLimite && !S.tasks.some(x=>(x.repeteOrigem||x.id)===origem && x.prazo===prox && x.status!=='concluido')){
             novaOcorr = {
               id: uid(), titulo:t.titulo, desc:t.desc, cat:t.cat, origem:t.origem, resp:t.resp,
               solicitante:t.solicitante, pri:t.pri, status:'backlog', criada:hoje(),
               inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete,
-              repeteDiaSem:t.repeteDiaSem, repeteDiaMes:t.repeteDiaMes, repeteOrigem:origem,
+              repeteDiaSem:t.repeteDiaSem, repeteDiaMes:t.repeteDiaMes, repeteAte:t.repeteAte||null, repeteOrigem:origem,
               check:(t.check||[]).map(c=>({t:c.t,d:false})), concluida:null, coment:[], hist:[]
             };
             S.tasks.push(novaOcorr);
@@ -1544,109 +1475,27 @@ function abrirTask(id){
         }
       }
 
+      // concluir pelo formulário segue a mesma regra de concluir arrastando
+      const proxConclusao = estavaConcluido ? null : criarProximaOcorrencia(t);
+
       if(ONLINE){
         const ops = DB.salvarTask(t, false)
           .then(()=>Promise.all(comentPend.map(txt=>DB.comentar(t.id, user(S.me).id, txt).catch(()=>{}))))
           .then(()=>Promise.all(apagadas.map(x=>DB.apagarTask(x.id).catch(()=>{}))))
+          .then(()=>Promise.all(ajustadas.map(x=>DB.salvarTask(x, false))))
           .then(()=> novaOcorr ? DB.salvarTask(novaOcorr, true) : null)
+          .then(()=> proxConclusao ? DB.salvarTask(proxConclusao, true) : null)
           .then(recarregar)
           .catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'salvar',task:t,novo:false}); toast('Sem conexão: alteração guardada, vai pro banco quando a internet voltar.',true); } else toast('Erro ao salvar: '+(e.message||e),true); });
       }
       if(regraMudou && (apagadas.length || novaOcorr)){
         toast(`Repetição atualizada.${apagadas.length?` ${apagadas.length} ocorrência(s) futura(s) refeita(s).`:''}${novaOcorr?` Próxima: ${fmt(novaOcorr.prazo)}.`:''}`);
       } else {
-        toast('Tarefa salva.');
+        toast(proxConclusao ? `Tarefa salva · próxima criada p/ ${fmt(proxConclusao.prazo)}` : 'Tarefa salva.');
       }
     }
     limparRascunho(id);   // salvou de verdade: descarta o rascunho automático
     fechar(); render();
-  };
-}
-
-function abrirRotina(id){
-  ultimoFoco = document.activeElement;
-  const orig = id ? S.rotinas.find(x=>x.id===id) : null;
-  if(id && !orig){ toast('Rotina não encontrada.', true); return; }
-  const novo = !orig;
-  const r = orig || {titulo:'',cat:'BI',resp:S.me,pri:3,est:1,freq:'uteis',dias:[1],diaMes:1,prazoOffset:0,expiraDias:2,ativa:true,ultima:null};
-  let dias = [...(r.dias||[])];
-
-  sheet.innerHTML = `
-    <header><b id="shTitle" style="font-size:15px">${novo?'Nova rotina':'Rotina'}</b><span style="flex:1"></span>
-      ${novo?'':'<button class="btn sm danger" id="del">Excluir</button>'}
-      <button class="btn sm" id="x" aria-label="Fechar">✕</button></header>
-    <div class="in">
-      <div class="f"><label for="r_tit">Título da rotina</label>
-        <input id="r_tit" value="${esc(r.titulo)}" placeholder="Ex.: Checar atualização das bases às 07h">
-        <span class="err hide" id="e_tit">Escreva um título.</span></div>
-      <div class="row3">
-        <div class="f"><label for="r_cat">Categoria</label><select id="r_cat">${optC(r.cat)}</select></div>
-        <div class="f"><label for="r_resp">Responsável</label><select id="r_resp">${optU(r.resp)}</select></div>
-        <div class="f"><label for="r_pri">Prioridade</label><select id="r_pri">${optP(r.pri)}</select></div>
-      </div>
-      <div class="f"><label for="r_freq">Repetição</label>
-        <select id="r_freq">
-          <option value="diaria"  ${r.freq==='diaria'?'selected':''}>Todo dia</option>
-          <option value="uteis"   ${r.freq==='uteis'?'selected':''}>Dias úteis (seg a sex)</option>
-          <option value="semanal" ${r.freq==='semanal'?'selected':''}>Dias específicos da semana</option>
-          <option value="mensal"  ${r.freq==='mensal'?'selected':''}>Uma vez por mês</option>
-        </select></div>
-      <div class="f ${r.freq==='semanal'?'':'hide'}" id="boxDias"><label>Dias da semana</label>
-        <div class="days">${DIAS.map((d,i)=>`<button type="button" data-d="${i}" aria-pressed="${dias.includes(i)}">${d}</button>`).join('')}</div>
-        <span class="err hide" id="e_dias">Escolha pelo menos um dia.</span></div>
-      <div class="f ${r.freq==='mensal'?'':'hide'}" id="boxMes"><label for="r_dm">Dia do mês</label>
-        <input type="number" min="1" max="28" id="r_dm" value="${r.diaMes||1}">
-        <span class="log">Limitado a 28 para não pular fevereiro.</span></div>
-      <div class="row3">
-        <div class="f"><label for="r_est">Horas estimadas</label><input type="number" step="0.5" min="0" max="40" id="r_est" value="${r.est}"></div>
-        <div class="f"><label for="r_off">Prazo (dias após criar)</label><input type="number" min="0" max="30" id="r_off" value="${r.prazoOffset||0}"></div>
-        <div class="f"><label for="r_exp">Expira em (dias)</label><input type="number" min="0" max="60" id="r_exp" value="${r.expiraDias||0}">
-          <span class="log">0 = nunca expira e acumula no quadro.</span></div>
-      </div>
-      <div class="f"><label for="r_ativa">Situação</label>
-        <select id="r_ativa"><option value="1" ${r.ativa?'selected':''}>Ativa</option><option value="0" ${r.ativa?'':'selected'}>Pausada</option></select></div>
-      <div class="hint" style="margin:0">A rotina é o molde. Quando a data bate, ela cria uma tarefa nova no quadro com esses dados.
-      Se a tarefa não for concluída dentro do prazo de expiração, ela sai do quadro e conta como rotina perdida no painel — é assim que você enxerga rotina que ninguém cumpre.</div>
-    </div>
-    <footer><button class="btn" id="cancel">Cancelar</button><button class="btn pri" id="save">${novo?'Criar rotina':'Salvar'}</button></footer>`;
-  abrir();
-
-  const q = s => sheet.querySelector(s);
-  q('#r_freq').onchange = e => {
-    q('#boxDias').classList.toggle('hide', e.target.value!=='semanal');
-    q('#boxMes').classList.toggle('hide', e.target.value!=='mensal');
-  };
-  sheet.querySelectorAll('.days button').forEach(b=>b.onclick=()=>{
-    const d=+b.dataset.d;
-    if(dias.includes(d)) dias = dias.filter(x=>x!==d); else dias.push(d);
-    b.setAttribute('aria-pressed', dias.includes(d));
-    q('#e_dias').classList.add('hide');
-  });
-  q('#x').onclick = q('#cancel').onclick = fechar;
-  if(!novo) q('#del').onclick = () => {
-    const idx = S.rotinas.indexOf(r);
-    S.rotinas = S.rotinas.filter(x=>x.id!==r.id); fechar(); render();
-    if(ONLINE){ DB.apagarRotina(r.id).catch(e=>toast('Erro ao excluir rotina: '+(e.message||e),true)); }
-    toast('Rotina excluída. As tarefas já geradas continuam.', true, () => { S.rotinas.splice(idx,0,r); render(); });
-  };
-
-  q('#save').onclick = () => {
-    const tit = q('#r_tit').value.trim(), freq = q('#r_freq').value;
-    q('#e_tit').classList.toggle('hide', !!tit);
-    const semDia = freq==='semanal' && !dias.length;
-    q('#e_dias').classList.toggle('hide', !semDia);
-    if(!tit || semDia){ toast('Corrija os campos marcados.', true); return; }
-    const o = {titulo:tit, cat:q('#r_cat').value, resp:q('#r_resp').value, pri:+q('#r_pri').value, freq,
-      dias:dias.slice().sort(), diaMes:Math.min(28,Math.max(1,+q('#r_dm').value||1)),
-      est:Math.max(0,+q('#r_est').value||0), prazoOffset:Math.max(0,+q('#r_off').value||0),
-      expiraDias:Math.max(0,+q('#r_exp').value||0), ativa:q('#r_ativa').value==='1'};
-    if(novo){ const nr = Object.assign({id:uid(), ultima:addDias(hoje(),-1)}, o); S.rotinas.push(nr);
-      if(ONLINE){ DB.salvarRotina(nr,true).then(()=>DB.processarRotinas()).then(recarregar).catch(e=>toast('Erro ao salvar rotina: '+(e.message||e),true)); } }
-    else { Object.assign(r, o);
-      if(ONLINE){ DB.salvarRotina(r,false).catch(e=>toast('Erro ao salvar rotina: '+(e.message||e),true)); } }
-    const n = gerarRotinas(); expirarRotinas();
-    fechar(); render();
-    toast(novo ? `Rotina criada${n?` · ${n} tarefa(s) gerada(s)`:''}.` : 'Rotina salva.');
   };
 }
 
@@ -1667,7 +1516,6 @@ function abrirAjuda(){
             ['Quadro','O painel principal. Cada cartão é uma tarefa. Arraste o cartão entre as colunas conforme o trabalho anda: <b>A fazer → Em andamento → Em validação → Concluída</b>. Se preferir, clique no cartão e mude o status por dentro.'],
             ['Minhas tarefas','Só o que é seu, do prazo mais apertado pro mais folgado.'],
             ['Lista completa','Tudo em formato de tabela. Dá pra ordenar clicando no título de cada coluna.'],
-            ['Rotinas','Tarefas que se repetem (todo dia, toda terça, todo dia 5). Você cadastra uma vez e o sistema cria a tarefa sozinho na data certa.'],
             ['Coordenação','Visão de quem lidera: quem está sobrecarregado, o que vence na semana e o que travou.']
           ].map(([t,d])=>`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:11px">
             <b style="font-size:13px">${t}</b><div style="color:var(--mut);font-size:12.5px;line-height:1.5;margin-top:3px">${d}</div></div>`).join('')}
@@ -1687,7 +1535,8 @@ function abrirAjuda(){
         <div class="eyebrow" style="margin-bottom:8px">O que significam as palavras</div>
         <div style="display:grid;gap:6px;font-size:12.5px;color:var(--mut)">
           <div><b style="color:var(--tx)">Categoria</b> — o tipo do trabalho: B.I, ADM, Chamado ou Gestão.</div>
-          <div><b style="color:var(--tx)">Origem</b> — de onde veio: um pedido que chegou (Chamado), algo planejado (Projeto), uma ideia de melhorar (Melhoria) ou uma rotina.</div>
+          <div><b style="color:var(--tx)">Origem</b> — de onde veio: um pedido que chegou (Chamado), algo planejado (Projeto), uma ideia de melhorar (Melhoria) ou uma rotina. É só uma etiqueta.</div>
+          <div><b style="color:var(--tx)">Repetição</b> — é ela que faz a tarefa voltar. A cada data nova, o sistema cria a tarefa mesmo que a anterior não tenha sido concluída, e as atrasadas ficam acumuladas no quadro. Para encerrar, mude para "Não repete".</div>
           <div><b style="color:var(--tx)">Em validação</b> — a tarefa está pronta e esperando alguém conferir.</div>
           <div><b style="color:var(--tx)">Em validação</b> — a tarefa está pronta e esperando alguém conferir.</div>
         </div>
@@ -1752,6 +1601,30 @@ function festejar(){
   }catch(e){ /* confete nunca pode quebrar o app */ }
 }
 
+/* Regra única ao concluir uma tarefa que repete:
+   - se ainda há outra aberta na série, não cria nada (a função do banco cuida das datas);
+   - se não sobrou nenhuma aberta, cria a próxima depois da ÚLTIMA data da série. */
+const PISO_REPETICAO = '2026-11-01';   // mesma data de v_piso em gerar_repeticoes, no banco
+function criarProximaOcorrencia(t){
+  if(t.status!=='concluido' || !t.repete) return null;
+  const origem = t.repeteOrigem || t.id;
+  const serie = S.tasks.filter(x => (x.repeteOrigem||x.id) === origem);
+  if(serie.some(ativa)) return null;
+  const ultima = serie.reduce((m,x) => x.prazo && x.prazo > m ? x.prazo : m, t.prazo || t.concluida || hoje());
+  let prox = proximaData(ultima, t.repete, {diaSem:t.repeteDiaSem, diaMes:t.repeteDiaMes});
+  while(prox && prox < PISO_REPETICAO) prox = proximaData(prox, t.repete, {diaSem:t.repeteDiaSem, diaMes:t.repeteDiaMes});
+  if(!prox || (t.repeteAte && prox > t.repeteAte)) return null;
+  const nova = {
+    id: uid(), titulo:t.titulo, desc:t.desc, cat:t.cat, origem:t.origem, resp:t.resp,
+    solicitante:t.solicitante, pri:t.pri, status:'backlog', criada:hoje(),
+    inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete,
+    repeteDiaSem:t.repeteDiaSem, repeteDiaMes:t.repeteDiaMes, repeteAte:t.repeteAte||null, repeteOrigem:origem,
+    check:(t.check||[]).map(c=>({t:c.t,d:false})), concluida:null, coment:[], hist:[]
+  };
+  S.tasks.push(nova);
+  return nova;
+}
+
 function mover(id, novoSt){
   const t = S.tasks.find(x=>x.id===id); if(!t || t.status===novoSt) return;
   const stAntes = t.status, conclAntes = t.concluida;
@@ -1761,23 +1634,8 @@ function mover(id, novoSt){
   t.concluida = novoSt==='concluido' ? (t.concluida || hoje()) : null;
   if(novoSt==='concluido' && stAntes!=='concluido') festejar();  // 🎉 confete
 
-  // recorrência: ao concluir uma tarefa que repete, cria a próxima ocorrência
-  let criada = null;
-  if(novoSt==='concluido' && t.repete){
-    const baseData = t.prazo || t.concluida || hoje();
-    const prox = proximaData(baseData, t.repete, {diaSem:t.repeteDiaSem, diaMes:t.repeteDiaMes});
-    const origem = t.repeteOrigem || t.id;
-    if(prox && !S.tasks.some(x=>(x.repeteOrigem||x.id)===origem && x.prazo===prox && x.status!=='concluido')){
-      criada = {
-        id: uid(), titulo:t.titulo, desc:t.desc, cat:t.cat, origem:t.origem, resp:t.resp,
-        solicitante:t.solicitante, pri:t.pri, status:'backlog', criada:hoje(),
-        inicio:prox, prazo:prox, rotulos:[...(t.rotulos||[])], repete:t.repete,
-        repeteDiaSem:t.repeteDiaSem, repeteDiaMes:t.repeteDiaMes, repeteOrigem:origem,
-        check:(t.check||[]).map(c=>({t:c.t,d:false})), concluida:null, coment:[], hist:[]
-      };
-      S.tasks.push(criada);
-    }
-  }
+  // recorrência: mesma regra para arrastar e para o formulário
+  const criada = stAntes==='concluido' ? null : criarProximaOcorrencia(t);
   render();
   if(ONLINE){
     DB.moverTask(id, t.status, t.concluida).catch(e=>{ if(ehErroRede(e)){ enfileirar({tipo:'mover',id,status:t.status,concluida:t.concluida}); } else toast('Erro ao mover: '+(e.message||e),true); });
@@ -1903,7 +1761,7 @@ const VIEWS   = {board:vBoard, minhas:vMinhas, lista:vLista, painel:vPainel, cal
 function render(){
   if(S.view==='painel' && !ehGestor()) S.view='board';   // trava de segurança
   $('#title').textContent = TITULOS[S.view] || 'Quadro';
-  const semFiltro = S.view==='painel' || S.view==='rotinas' || S.view==='calendario';
+  const semFiltro = S.view==='painel' || S.view==='calendario';
   $('#filters').classList.toggle('hide', semFiltro);
   (VIEWS[S.view] || vBoard)();
   const abertas = S.tasks.filter(ativa);
@@ -2002,16 +1860,16 @@ if($('#temaTop')) $('#temaTop').onclick = toggleTema;
 // aplica tema salvo ao abrir
 try{ const tm=localStorage.getItem('central-tema')||'claro'; aplicaTema(tm); }catch(e){}
 $('#zerar').onclick   = () => {
-  if(!confirm('Recomeçar do zero apaga todas as tarefas e rotinas deste navegador e não pode ser desfeito. Deseja continuar?\n\nDica: use "Salvar cópia" antes, se quiser guardar o que já tem.')) return;
+  if(!confirm('Recomeçar do zero apaga todas as tarefas deste navegador e não pode ser desfeito. Deseja continuar?\n\nDica: use "Salvar cópia" antes, se quiser guardar o que já tem.')) return;
   limparTudo();
-  S.users = S.users; S.tasks = []; S.rotinas = [];
+  S.users = S.users; S.tasks = [];
   S.filtro = {q:'',cat:'',resp:'',pri:'',ori:'',periodo:''};
   ['#q','#fCat','#fResp','#fPri','#fOri'].forEach(s=>$(s)&&($(s).value=''));
   render(); toast('Tudo limpo. Comece criando uma tarefa.');
 };
 
 $('#exp').onclick = () => {
-  const blob = new Blob([JSON.stringify({versao:2, exportadoEm:new Date().toISOString(), users:S.users, tasks:S.tasks, rotinas:S.rotinas}, null, 2)], {type:'application/json'});
+  const blob = new Blob([JSON.stringify({versao:2, exportadoEm:new Date().toISOString(), users:S.users, tasks:S.tasks}, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = `central-equipe-${hoje()}.json`; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
@@ -2028,9 +1886,8 @@ $('#imp').onclick = () => {
         if(!Array.isArray(d.tasks) || !Array.isArray(d.users)) throw new Error('estrutura');
         S.users   = d.users;
         S.tasks   = d.tasks.map(t=>Object.assign({origem:'projeto',check:[],coment:[],hist:[],est:0,gasto:0},t));
-        S.rotinas = Array.isArray(d.rotinas)?d.rotinas:[];
-        montarSelects(); gerarRotinas(); expirarRotinas(); render();
-        toast(`Importado: ${S.tasks.length} tarefas e ${S.rotinas.length} rotinas.`);
+        montarSelects(); render();
+        toast(`Importado: ${S.tasks.length} tarefas.`);
       }catch(err){ toast('Arquivo inválido. Esperado o JSON exportado por este app.', true); }
     };
     rd.onerror = () => toast('Não foi possível ler o arquivo.', true);
@@ -2048,29 +1905,49 @@ document.addEventListener('keydown', e => {
 
 /* =========================================================================
    9. CAMADA DE DADOS SUPABASE  (online)  +  LOGIN
-   Converte entre o formato do app (S.tasks/S.rotinas/S.users) e as colunas
+   Converte entre o formato do app (S.tasks/S.users) e as colunas
    das tabelas equipe.*. Em modo local isso nem é usado.
    ========================================================================= */
+// primeiro dia do mês passado: tudo antes disso (e já concluído) fica só no banco
+function inicioJanela(){
+  const x = new Date(hoje()+'T12:00');
+  x.setDate(1); x.setMonth(x.getMonth()-1);
+  return isoLocal(x);
+}
+// o servidor devolve no máximo 1.000 linhas por pedido, por isso busca em páginas
+const TAM_PAGINA = 1000;
+async function buscarTarefas(){
+  const ini = inicioJanela();
+  // abertas vêm sempre, mesmo antigas, senão uma atrasada sumiria do quadro
+  const filtro = `status.not.in.(concluido,expirado),prazo.gte.${ini},concluido_em.gte.${ini},criado_em.gte.${ini}`;
+  let todas = [];
+  for(let de=0; ; de+=TAM_PAGINA){
+    const {data, error} = await sb.from('tarefas')
+      .select('*, checklist(*), comentarios(*)')
+      .or(filtro)
+      .order('criado_em',{ascending:false}).order('id')   // id desempata para a página não repetir linha
+      .range(de, de+TAM_PAGINA-1);
+    if(error) throw error;
+    if(!data.length) break;
+    todas = todas.concat(data);
+  }
+  // tarefa criada durante a leitura empurra as páginas e repete uma linha: fica só uma
+  return [...new Map(todas.map(x=>[x.id,x])).values()];
+}
+
 const DB = {
-  // ----- carregar tudo do banco para o estado do app -----
+  // ----- carregar do banco para o estado do app -----
   async carregarTudo(){
-    const [mem, tar, rot] = await Promise.all([
+    const [mem, tarefas] = await Promise.all([
       sb.from('membros').select('*').order('nome'),
-      sb.from('tarefas').select('*, checklist(*), comentarios(*)').order('criado_em',{ascending:false}).limit(100000),
-      sb.from('rotinas').select('*')
+      buscarTarefas()
     ]);
     if(mem.error) throw mem.error;
-    if(tar.error) throw tar.error;
-    if(rot.error) throw rot.error;
 
     S.users = mem.data.map(m=>({id:m.id, nome:m.nome, ini:m.iniciais, papel:m.papel,
       cargo:m.cargo, cor:m.cor, capacidade:Number(m.capacidade)||8, email:m.email, auth_id:m.auth_id}));
 
-    S.tasks = tar.data.map(fromRow);
-    S.rotinas = rot.data.map(r=>({id:r.id, titulo:r.titulo, cat:r.categoria_id, resp:r.responsavel,
-      pri:r.prioridade, est:Number(r.horas_est)||0, freq:r.freq, dias:r.dias_semana||[],
-      diaMes:r.dia_mes||1, prazoOffset:r.prazo_offset||0, expiraDias:r.expira_dias||0,
-      ativa:r.ativa, ultima:r.ultima_geracao}));
+    S.tasks = tarefas.map(fromRow);
   },
   // ----- tarefa: criar/atualizar/apagar -----
   async salvarTask(t, novo){
@@ -2096,33 +1973,24 @@ const DB = {
   async comentar(tarefa_id, autor, texto){
     const {error} = await sb.from('comentarios').insert({tarefa_id, autor, texto}); if(error) throw error;
   },
-  // ----- rotina -----
-  async salvarRotina(r, novo){
-    const row = {titulo:r.titulo, categoria_id:r.cat, responsavel:r.resp, prioridade:r.pri,
-      horas_est:r.est, freq:r.freq, dias_semana:r.dias, dia_mes:r.diaMes, prazo_offset:r.prazoOffset,
-      expira_dias:r.expiraDias, ativa:r.ativa};
-    if(novo){ const {data,error}=await sb.from('rotinas').insert(row).select().single(); if(error) throw error; r.id=data.id; }
-    else { const {error}=await sb.from('rotinas').update(row).eq('id', r.id); if(error) throw error; }
-  },
-  async apagarRotina(id){ const {error}=await sb.from('rotinas').delete().eq('id', id); if(error) throw error; },
-  // ----- rotinas do dia + expiração no servidor -----
-  async processarRotinas(){
-    const a = await sb.rpc('gerar_tarefas_rotina'); if(a.error) throw a.error;
-    const b = await sb.rpc('expirar_rotinas');      if(b.error) throw b.error;
-    return {geradas:a.data||0, expiradas:b.data||0};
+  // ----- cria no servidor as repetições cuja data já chegou -----
+  async gerarRepeticoes(){
+    const {data, error} = await sb.rpc('gerar_repeticoes');
+    if(error) throw error;
+    return data || 0;
   }
 };
 function fromRow(r){
   return {id:r.id, titulo:r.titulo, desc:r.descricao||'', cat:r.categoria_id, origem:r.origem||'projeto',
     resp:r.responsavel, solicitante:r.solicitante||'', pri:r.prioridade, status:r.status,
-    criada:(r.criado_em||'').slice(0,10), inicio:r.data_inicio||null, prazo:r.prazo,
-    rotulos:Array.isArray(r.rotulos)?r.rotulos:[], repete:r.repete||'', repeteOrigem:r.repete_origem||null,
+    criada:r.criado_em?isoLocal(new Date(r.criado_em)):'', inicio:r.data_inicio||null, prazo:r.prazo,
+    rotulos:Array.isArray(r.rotulos)?r.rotulos:[], repete:r.repete||'', repeteOrigem:r.repete_origem||null, repeteAte:r.repete_ate||null,
     repeteDiaSem:(r.repete_dia_sem==null?null:r.repete_dia_sem), repeteDiaMes:(r.repete_dia_mes==null?null:r.repete_dia_mes),
     ordem:(r.ordem==null?null:r.ordem),
     emailLink:r.email_link||'',
     check:(r.checklist||[]).sort((a,b)=>a.ordem-b.ordem).map(c=>({id:c.id,t:c.texto,d:c.feito})),
     rotinaId:r.rotina_id, concluida:r.concluido_em,
-    coment:(r.comentarios||[]).map(c=>({autor:c.autor,texto:c.texto,quando:(c.criado_em||'').slice(0,10)})), hist:[]};
+    coment:(r.comentarios||[]).map(c=>({autor:c.autor,texto:c.texto,quando:c.criado_em?isoLocal(new Date(c.criado_em)):''})), hist:[]};
 }
 const ehUUID = v => typeof v==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 function toRow(t){
@@ -2132,6 +2000,7 @@ function toRow(t){
     solicitante:t.solicitante, prioridade:t.pri, status:t.status, prazo:t.prazo||null, data_inicio:t.inicio||null,
     rotulos:t.rotulos||[], repete:t.repete||'', repete_origem:ehUUID(t.repeteOrigem)?t.repeteOrigem:null,
     repete_dia_sem:(t.repeteDiaSem==null?null:t.repeteDiaSem), repete_dia_mes:(t.repeteDiaMes==null?null:t.repeteDiaMes),
+    repete_ate:t.repeteAte||null,
     ordem:(t.ordem==null?null:t.ordem),
     email_link:t.emailLink||'',
     concluido_em:t.concluida||null, criado_por:criador};
@@ -2193,11 +2062,24 @@ function telaLogin(){
   box.querySelector('#lg_email').focus();
 }
 
+// cria as repetições do dia e recarrega; uma falha aqui agora aparece na tela
+let diaRepeticoes = null;
+async function atualizarRepeticoes(){
+  diaRepeticoes = hoje();
+  try{
+    const n = await DB.gerarRepeticoes();
+    if(n){ await DB.carregarTudo(); toast(`${n} tarefa(s) repetida(s) criada(s).`); }
+  }catch(e){
+    diaRepeticoes = null;   // tenta de novo na próxima vez que a aba voltar
+    toast('Não consegui gerar as tarefas repetidas: '+(e.message||e), true);
+  }
+}
+
 async function iniciarApp(authUser){
   const w = document.querySelector('#loginWrap'); if(w) w.remove();
   document.querySelector('.app').style.display='';
   // ONLINE nunca mostra dados de exemplo: zera antes de puxar do banco
-  S.tasks = []; S.rotinas = []; S.users = [];
+  S.tasks = []; S.users = [];
   try{
     await DB.carregarTudo();
     // quem sou eu: casa por auth_id, senão por e-mail (minúsculo)
@@ -2214,10 +2096,16 @@ async function iniciarApp(authUser){
     S.me = meu.id;
     // conserta o vínculo se o auth_id ainda não estava salvo
     if(!meu.auth_id){ try{ await sb.from('membros').update({auth_id:authUser.id}).eq('id', meu.id); meu.auth_id=authUser.id; }catch(_){} }
-    try{ const r = await DB.processarRotinas(); if(r.geradas) toast(`${r.geradas} tarefa(s) de rotina geradas.`); await DB.carregarTudo(); }catch(_){}
+    await atualizarRepeticoes();
     montarSelects(); render();
+    // quem deixa a aba aberta de um dia para o outro também recebe as tarefas do dia
+    document.addEventListener('visibilitychange', async () => {
+      if(document.visibilityState==='visible' && diaRepeticoes!==hoje()){
+        await atualizarRepeticoes(); montarSelects(); render();
+      }
+    });
   }catch(e){
-    S.tasks = []; S.rotinas = []; montarSelects(); render();
+    S.tasks = []; montarSelects(); render();
     toast('Não consegui carregar do banco: '+(e.message||e)+'. Recarregue a página.', true);
   }
   // login travado: identidade vem da conta
@@ -2233,7 +2121,6 @@ async function iniciarApp(authUser){
 // carrega o que já estava salvo; se não houver nada, mantém os dados de exemplo
 const tinha = carregar();
 montarSelects();
-const ger = gerarRotinas(); const exp = expirarRotinas();
 render();
 
 if(ONLINE){
@@ -2250,7 +2137,6 @@ if(ONLINE){
   let primeiro = false;
   try{ primeiro = temStorage && !localStorage.getItem('central-equipe-visto'); }catch(e){}
   if(primeiro){ setTimeout(abrirAjuda, 300); try{ localStorage.setItem('central-equipe-visto','1'); }catch(e){} }
-  else if(ger) toast(`${ger} tarefa(s) de rotina gerada(s)${exp?` · ${exp} expirada(s)`:''}.`);
 }
 </script>
 </html>
