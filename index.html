@@ -91,8 +91,8 @@ main{overflow:auto;display:flex;flex-direction:column}
 .calitem.com.pendente{border-color:#9775FA}
 .calbadge.com{background:#9775FA}
 .tagcom{font-size:10px;font-weight:600;color:#9775FA;border:1px solid #9775FA;border-radius:4px;padding:0 5px;white-space:nowrap}
-.chkcom{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
-.chkcom input{width:16px;height:16px;accent-color:#9775FA}
+.f label.chkcom{display:flex;align-items:center;gap:8px;cursor:pointer;font-family:inherit;font-size:13px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--tx)}
+.f .chkcom input{width:16px;height:16px;padding:0;flex:none;accent-color:#9775FA}
 .calmais{font-size:10px;color:var(--mut);padding:1px 5px}
 .calbadge{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:3px}
 .calbadge.feita{background:var(--ok)}
@@ -368,6 +368,10 @@ const ROTULOS = {
 // flag de comunicado ao campo (guardado em rotulos, sem coluna nova no banco)
 const ROT_COM = 'comunicado';
 const ehCom = t => Array.isArray(t.rotulos) && t.rotulos.includes(ROT_COM);
+// quantos dias o comunicado fica no calendário (a partir do prazo); guardado em rotulos como 'comdias:N'
+const ROT_DIAS = 'comdias:';
+const ehRotInterno = r => r===ROT_COM || String(r).startsWith(ROT_DIAS);
+const comDias = t => { const r=(t.rotulos||[]).find(x=>String(x).startsWith(ROT_DIAS)); const n=r?parseInt(r.slice(ROT_DIAS.length),10):1; return n>=1?n:1; };
 
 // tipos de repetição dentro da própria tarefa
 const REPETE = {
@@ -680,8 +684,8 @@ function cardHTML(t){
   const prox= si<STATUS.length-1 ? STATUS[si+1] : null;
   return `<div class="card" draggable="true" data-id="${t.id}" role="button" tabindex="0" style="border-left-color:${c}" aria-label="${esc(aria)}">
     <button type="button" class="conc ${t.status==='concluido'?'on':''}" data-conc="${t.id}" title="${t.status==='concluido'?'Reabrir':'Marcar como concluída'}" aria-label="${t.status==='concluido'?'Reabrir tarefa':'Concluir tarefa'}">✓</button>
-    ${ehCom(t)?`<span class="tagcom" title="Comunicado ao campo">📢 Comunicado</span>`:''}
-    ${(t.rotulos&&t.rotulos.filter(r=>r!==ROT_COM).length)?`<span class="rots">${t.rotulos.filter(r=>r!==ROT_COM).map(r=>`<span class="rotulo" style="background:${ROTULOS[r]||r}" title="${r}"></span>`).join('')}</span>`:''}
+    ${ehCom(t)?`<span class="tagcom" title="Comunicado ao campo">📢 Comunicado${comDias(t)>1?' · '+comDias(t)+' dias':''}</span>`:''}
+    ${(t.rotulos&&t.rotulos.filter(r=>!ehRotInterno(r)).length)?`<span class="rots">${t.rotulos.filter(r=>!ehRotInterno(r)).map(r=>`<span class="rotulo" style="background:${ROTULOS[r]||r}" title="${r}"></span>`).join('')}</span>`:''}
     <span class="t" style="padding-right:22px">${esc(t.titulo)}</span>
     ${prog!==null?`<span class="bar"><i style="width:${prog}%"></i></span>`:''}
     <span class="meta">
@@ -902,18 +906,21 @@ function vCalendario(){
 
   // agrupa por dia (só do mês exibido)
   const porDia = {};
+  const fimCom = t => addDias(t.prazo, comDias(t)-1);     // último dia em que fica no calendário
   base.forEach(t=>{
-    const d=new Date(t.prazo+'T12:00');
-    if(d.getFullYear()===ano && d.getMonth()===mes){
-      const dia=d.getDate();
-      (porDia[dia]=porDia[dia]||[]).push(t);
+    for(let i=0;i<comDias(t);i++){
+      const d=new Date(addDias(t.prazo,i)+'T12:00');
+      if(d.getFullYear()===ano && d.getMonth()===mes){
+        const dia=d.getDate();
+        (porDia[dia]=porDia[dia]||[]).push(t);
+      }
     }
   });
 
   // status de cor de uma tarefa
   const corTask = t => {
     if(t.status==='concluido') return 'feita';           // verde
-    if(t.prazo < h) return 'atrasada';                   // vermelho (venceu e não fez)
+    if(fimCom(t) < h) return 'atrasada';                 // vermelho (passou o período e não fez)
     return 'pendente';                                   // neutro (ainda não venceu)
   };
 
@@ -929,10 +936,10 @@ function vCalendario(){
   const DOW=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
   // contadores do mês
-  const todasMes = Object.values(porDia).flat();
+  const todasMes = [...new Set(Object.values(porDia).flat())];   // cada comunicado conta 1 vez
   const nFeitas = todasMes.filter(t=>t.status==='concluido').length;
-  const nAtras  = todasMes.filter(t=>t.status!=='concluido' && t.prazo<h).length;
-  const nPend   = todasMes.filter(t=>t.status!=='concluido' && t.prazo>=h).length;
+  const nAtras  = todasMes.filter(t=>t.status!=='concluido' && fimCom(t)<h).length;
+  const nPend   = todasMes.filter(t=>t.status!=='concluido' && fimCom(t)>=h).length;
   const nCom    = todasMes.filter(ehCom).length;
 
   $('#view').innerHTML = `
@@ -965,13 +972,13 @@ function vCalendario(){
       return `<div class="calcel ${hoje2}">
         <div class="caldia">${d}</div>
         <div class="calitems">
-          ${items.slice(0,4).map(t=>`<div class="calitem ${corTask(t)}${ehCom(t)?' com':''}" data-tid="${t.id}" title="${ehCom(t)?'Comunicado ao campo · ':''}${esc(t.titulo)} · ${esc(user(t.resp).nome)}">${ehCom(t)?'📢 ':''}${esc(t.titulo)}</div>`).join('')}
+          ${items.slice(0,4).map(t=>`<div class="calitem ${corTask(t)}${ehCom(t)?' com':''}" data-tid="${t.id}" title="${ehCom(t)?'Comunicado ao campo · '+fmt(t.prazo)+(comDias(t)>1?' a '+fmt(fimCom(t))+' ('+comDias(t)+' dias)':'')+' · ':''}${esc(t.titulo)} · ${esc(user(t.resp).nome)}">${ehCom(t)?'📢 ':''}${esc(t.titulo)}</div>`).join('')}
           ${items.length>4?`<div class="calmais">+${items.length-4} mais</div>`:''}
         </div>
       </div>`;
     }).join('')}
   </div>
-  <p class="hint" style="margin-top:12px">Mostra só as tarefas marcadas como <b>📢 Comunicado ao campo</b>, no dia do prazo. <b style="color:var(--ok)">Verde</b> = concluída · <b style="color:var(--bad)">Vermelho</b> = venceu e não foi feita · cinza = ainda a vencer. Clique numa tarefa para abrir.</p>`;
+  <p class="hint" style="margin-top:12px">Mostra só as tarefas marcadas como <b>📢 Comunicado ao campo</b>, a partir do prazo, pelos dias definidos na tarefa. <b style="color:var(--ok)">Verde</b> = concluída · <b style="color:var(--bad)">Vermelho</b> = venceu e não foi feita · cinza = ainda a vencer. Clique numa tarefa para abrir.</p>`;
 
   // navegação
   $('#calPrev').onclick = ()=>{ let m=mes-1,a=ano; if(m<0){m=11;a--;} S.cal.mes=m; S.cal.ano=a; render(); };
@@ -1182,7 +1189,11 @@ function abrirTask(id){
         <div class="f"><label for="f_prazo">Prazo (conclusão)</label><input type="date" id="f_prazo" value="${t.prazo||''}">
           <span class="err hide" id="e_prazo">Prazo anterior à data de início.</span></div>
       </div>
-      <div class="f"><label class="chkcom"><input type="checkbox" id="f_com" ${ehCom(t)?'checked':''}> 📢 Comunicado ao campo (aparece destacado no calendário, no dia do prazo)</label></div>
+      <div class="f"><label class="chkcom"><input type="checkbox" id="f_com" ${ehCom(t)?'checked':''}> 📢 Comunicado ao campo (aparece no calendário a partir do prazo)</label></div>
+      <div class="f" id="boxComDias" style="${ehCom(t)?'':'display:none'}">
+        <label for="f_comdias">Dias disponível no calendário</label>
+        <input type="number" id="f_comdias" min="1" max="60" step="1" value="${comDias(t)}" style="max-width:120px">
+        <span class="log" id="logComDias"></span></div>
       <div class="f"><label>Rótulos</label>
         <div class="rotpick" id="rotpick">${Object.entries(ROTULOS).map(([k,c])=>`<button type="button" data-rot="${k}" style="background:${c}" title="${k}" aria-pressed="${(t.rotulos||[]).includes(k)}" aria-label="Rótulo ${k}"></button>`).join('')}</div></div>
 
@@ -1333,6 +1344,18 @@ function abrirTask(id){
   q('#f_cat').onchange = e => { q('#hCat').textContent = cat(e.target.value).nome; q('#hCat').style.color = cor(e.target.value); };
   q('#f_inicio').oninput = valida;
 
+  // comunicado: mostra o campo de dias e o período resultante
+  const atualizaComDias = () => {
+    q('#boxComDias').style.display = q('#f_com').checked ? '' : 'none';
+    const n = Math.min(60,Math.max(1,parseInt(q('#f_comdias').value,10)||1)), pz = q('#f_prazo').value;
+    q('#logComDias').textContent = !pz ? 'Defina o prazo: o período começa nele.'
+      : n===1 ? 'Fica só no dia '+fmt(pz)+'.' : 'Fica de '+fmt(pz)+' até '+fmt(addDias(pz,n-1))+'.';
+  };
+  q('#f_com').addEventListener('change', atualizaComDias);
+  q('#f_comdias').addEventListener('input', atualizaComDias);
+  q('#f_prazo').addEventListener('input', atualizaComDias);
+  atualizaComDias();
+
   // rótulos (toggle)
   const rots = [...(t.rotulos||[])];
   q('#rotpick').querySelectorAll('[data-rot]').forEach(b=>b.onclick=()=>{
@@ -1386,7 +1409,7 @@ function abrirTask(id){
       titulo:q('#f_tit').value.trim(), desc:q('#f_desc').value, cat:q('#f_cat').value,
       origem:q('#f_ori').value, resp:q('#f_resp').value, pri:+q('#f_pri').value,
       status:q('#f_st').value, prazo:q('#f_prazo').value||null, inicio:q('#f_inicio').value||null,
-      solicitante:q('#f_sol').value.trim(), rotulos:(q('#f_com').checked ? [...rots.filter(r=>r!==ROT_COM), ROT_COM] : rots.filter(r=>r!==ROT_COM)), repete:q('#f_repete').value||'',
+      solicitante:q('#f_sol').value.trim(), rotulos:(()=>{ const base=rots.filter(r=>!ehRotInterno(r)); if(!q('#f_com').checked) return base; const n=Math.min(60,Math.max(1,parseInt(q('#f_comdias').value,10)||1)); return n>1?[...base,ROT_COM,ROT_DIAS+n]:[...base,ROT_COM]; })(), repete:q('#f_repete').value||'',
       repeteDiaSem: q('#f_diaSem') && q('#f_diaSem').value!=='' ? +q('#f_diaSem').value : null,
       repeteDiaMes: q('#f_diaMes') && q('#f_diaMes').value!=='' ? +q('#f_diaMes').value : null,
       emailLink:(q('#f_email').value||'').trim(), check:chk
